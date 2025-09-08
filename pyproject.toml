@@ -1,0 +1,15 @@
+[project]
+name = "brvc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gradio>=5.44.1",
+    "jurigged>=0.6.1",
+    "torch>=2.8.0",
+    "torchaudio>=2.8.0",
+    "transformers>=4.56.1",
+]
+[project.scripts]
+hello = "brvc.main:hello"
