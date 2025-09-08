@@ -1,0 +1,4 @@
+#!/usr/bin/env -S uv run --script
+
+import subprocess
+print("Hello, world!")
