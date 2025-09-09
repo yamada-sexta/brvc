@@ -5,10 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "datasets>=4.0.0",
     "gradio>=5.44.1",
     "jurigged>=0.6.1",
     "torch>=2.8.0",
     "torchaudio>=2.8.0",
+    "torchcodec>=0.7.0",
     "transformers>=4.56.1",
 ]
 [project.scripts]
