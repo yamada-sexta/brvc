@@ -9,18 +9,24 @@ import torch.nn.functional as F
 # from rvc.jit import load_inputs, get_jit_model, export_jit_model, save_pickle
 
 from .mel import MelSpectrogram
-from .f0 import F0Predictor
-from .models import get_rmvpe
+from ..f0_predictor import F0Predictor
+
+# from .f0 import F0Predictor
+from .serialization import load_rmvpe
 
 
-class RMVPE:
+class RMVPE(F0Predictor):
+    """
+    An implementation of RMVPE predictor
+    """
+
     def __init__(
         self,
         model_path: str,
         is_half: bool,
         device: str,
-        use_jit=False,
     ):
+        # if "privateuseone" in 
         hop_length = 160
         f0_min = 30
         f0_max = 8000
@@ -48,26 +54,7 @@ class RMVPE:
             mel_fmax=f0_max,
             device=self.device,
         ).to(self.device)
-
-        if "privateuseone" in str(self.device):
-            import onnxruntime as ort
-
-            self.model = ort.InferenceSession(
-                "%s/rmvpe.onnx" % os.environ["rmvpe_root"],
-                providers=["DmlExecutionProvider"],
-            )
-        else:
-
-            def rmvpe_jit_model():
-                ckpt = get_jit_model(model_path, is_half, self.device, rmvpe_jit_export)
-                model = torch.jit.load(BytesIO(ckpt["model"]), map_location=self.device)
-                model = model.to(self.device)
-                return model
-
-            if use_jit and not (is_half and "cpu" in str(self.device)):
-                self.model = rmvpe_jit_model()
-            else:
-                self.model = get_rmvpe(model_path, self.device, is_half)
+        self.model = load_rmvpe(model_path, self.device, is_half)
 
     def compute_f0(
         self,
@@ -85,11 +72,9 @@ class RMVPE:
             hidden = hidden.squeeze(0).cpu().numpy()
         else:
             hidden = hidden[0]
-        if self.is_half == True:
+        if self.is_half:
             hidden = hidden.astype("float32")
-
         f0 = self._decode(hidden, thred=filter_radius)
-
         return self._interpolate_f0(self._resize_f0(f0, p_len))[0]
 
     def _to_local_average_cents(self, salience, threshold=0.05):

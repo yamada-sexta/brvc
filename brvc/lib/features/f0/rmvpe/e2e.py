@@ -1,8 +1,14 @@
 from typing import Tuple
 
-import torch.nn as nn
+# import torch.nn as nn
+from torch import nn, Tensor
 
 from .deepunet import DeepUnet
+
+N_CLASS = 360
+
+N_MELS = 256
+
 
 class E2E(nn.Module):
     def __init__(
@@ -35,14 +41,14 @@ class E2E(nn.Module):
             )
         else:
             self.fc = nn.Sequential(
-                nn.Linear(3 * nn.N_MELS, nn.N_CLASS),
+                nn.Linear(3 * N_MELS, N_CLASS),
                 nn.Dropout(0.25),
                 nn.Sigmoid(),
             )
 
-    def forward(self, mel):
+    def forward(self, mel: Tensor) -> Tensor:
         mel = mel.transpose(-1, -2).unsqueeze(1)
-        x = self.cnn(self.unet(mel)).transpose(1, 2).flatten(-2)
+        x: Tensor = self.cnn(self.unet(mel)).transpose(1, 2).flatten(-2)
         x = self.fc(x)
         return x
 

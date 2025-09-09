@@ -40,19 +40,22 @@ class MelSpectrogram(torch.nn.Module):
         self.clamp = clamp
         self.is_half = is_half
 
+        if "privateuseone" in str(device):
+            raise KeyError(f"privateuseone is in {device}")
+
         self.stft = STFT(
             filter_length=n_fft,
             hop_length=hop_length,
             win_length=win_length,
-            window="hann",
-            use_torch_stft="privateuseone" not in str(device),
+            # window="hann",
+            # use_torch_stft="privateuseone" not in str(device),
         ).to(device)
 
     def forward(
         self,
         audio: torch.Tensor,
-        keyshift=0,
-        speed=1,
+        keyshift: int = 0,
+        speed: int = 1,
         center=True,
     ):
         factor = 2 ** (keyshift / 12)
