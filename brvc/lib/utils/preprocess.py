@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-
 def process_audio(
     input_dir: Union[str, Path],
     output_dir: Union[str, Path],
@@ -44,7 +43,7 @@ def process_audio(
             base_name = file_path.stem
             temp_no_silence = output_dir / f"{base_name}_nosil.wav"
 
-            # Step 1: remove silence
+            # Remove silence
             silence_cmd = [
                 "ffmpeg",
                 "-y",
@@ -61,7 +60,7 @@ def process_audio(
                 stderr=subprocess.DEVNULL,
             )
 
-            # Step 2: get duration of processed file
+            # Get duration of processed file
             probe_cmd = [
                 "ffprobe",
                 "-v",
@@ -81,7 +80,7 @@ def process_audio(
             )
             duration = float(result.stdout.strip())
 
-            # Step 3: split into chunks with overlap and normalize
+            # Split into chunks with overlap and normalize
             start = 0.0
             chunk_idx = 0
             while start < duration:
