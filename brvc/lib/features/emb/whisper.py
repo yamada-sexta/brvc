@@ -1,10 +1,11 @@
+# https://huggingface.co/docs/transformers/en/model_doc/xcodec
+
 from transformers import WhisperFeatureExtractor, BatchFeature
 import torch
 
 model_name = "openai/whisper-large-v3-turbo"
 
 feature_extractor = WhisperFeatureExtractor.from_pretrained(model_name)
-
 
 def extract(waveform: torch.Tensor, sampling_rate: int) -> torch.Tensor:
     input_features: torch.Tensor = feature_extractor(
