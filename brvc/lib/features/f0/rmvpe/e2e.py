@@ -34,7 +34,7 @@ class E2E(nn.Module):
         self.cnn = nn.Conv2d(en_out_channels, 3, (3, 3), padding=(1, 1))
         if n_gru:
             self.fc = nn.Sequential(
-                self.BiGRU(3 * 128, 256, n_gru),
+                BiGRU(3 * 128, 256, n_gru),
                 nn.Linear(512, 360),
                 nn.Dropout(0.25),
                 nn.Sigmoid(),
@@ -52,21 +52,22 @@ class E2E(nn.Module):
         x = self.fc(x)
         return x
 
-    class BiGRU(nn.Module):
-        def __init__(
-            self,
-            input_features: int,
-            hidden_features: int,
-            num_layers: int,
-        ):
-            super().__init__()
-            self.gru = nn.GRU(
-                input_features,
-                hidden_features,
-                num_layers=num_layers,
-                batch_first=True,
-                bidirectional=True,
-            )
 
-        def forward(self, x):
-            return self.gru(x)[0]
+class BiGRU(nn.Module):
+    def __init__(
+        self,
+        input_features: int,
+        hidden_features: int,
+        num_layers: int,
+    ):
+        super().__init__()
+        self.gru = nn.GRU(
+            input_features,
+            hidden_features,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+        )
+
+    def forward(self, x):
+        return self.gru(x)[0]
