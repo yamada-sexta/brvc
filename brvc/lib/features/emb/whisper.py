@@ -6,14 +6,15 @@ import torch
 model_name = "openai/whisper-large-v3-turbo"
 
 feature_extractor = WhisperFeatureExtractor.from_pretrained(model_name)
+import numpy as np
 
-def extract(waveform: torch.Tensor, sampling_rate: int) -> torch.Tensor:
-    input_features: torch.Tensor = feature_extractor(
+
+def extract(waveform: np.ndarray, sampling_rate: int) -> torch.Tensor:
+    input_features: BatchFeature = feature_extractor(
         waveform, sampling_rate=sampling_rate, return_tensors="pt"
     ).input_features
 
     return input_features
-
 
 def test():
 
