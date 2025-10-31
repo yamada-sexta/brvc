@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn import ConvTranspose1d, Conv1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 from lib.modules.source_module_hn_nsf import SourceModuleHnNSF
-from lib.modules.res_block2 import RES_BLOCK_VERSION, ResBlock2
+from lib.modules.res_block import RES_BLOCK_VERSION, ResBlock1
 from lib.utils.misc import init_weights
 
 
@@ -17,7 +17,7 @@ class GeneratorNSF(nn.Module):
         initial_channel: int,
         resblock_version: RES_BLOCK_VERSION,
         resblock_kernel_sizes: list[int],
-        resblock_dilation_sizes: list[int],
+        resblock_dilation_sizes: list[tuple[int, int, int]],
         upsample_rates: list[int],
         upsample_initial_channel: int,
         upsample_kernel_sizes: list[int],
@@ -49,8 +49,8 @@ class GeneratorNSF(nn.Module):
             padding=3,
         )
         # resblock = modules.ResBlock1 if resblock == "1" else modules.ResBlock2
-        res_block = ResBlock2
-
+        # res_block = ResBlock2 if resblock_version == "2" else ResBlock1
+        res_block = ResBlock1
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
             c_prev: int = upsample_initial_channel // (2**i)

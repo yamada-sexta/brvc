@@ -5,7 +5,7 @@ from typing import Literal, Optional, Tuple, Dict, Any, Union, List
 
 from lib.modules.generator_nsf import GeneratorNSF
 from lib.modules.posterior_encoder import PosteriorEncoder
-from lib.modules.res_block2 import RES_BLOCK_VERSION
+from lib.modules.res_block import RES_BLOCK_VERSION
 from lib.modules.residual_coupling_block import ResidualCouplingBlock
 from lib.modules.text_encoder import TextEncoder
 import logging
@@ -19,7 +19,7 @@ sr2sr: Dict[str, int] = {
 }
 
 
-class SynthesizerTrnMs256NSFsid(nn.Module):
+class SynthesizerTrnMsNSFsid(nn.Module):
     def __init__(
         self,
         spec_channels: int,
@@ -33,17 +33,18 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         p_dropout: float,
         resblock_version: RES_BLOCK_VERSION,
         resblock_kernel_sizes: List[int],
-        resblock_dilation_sizes: List[int],
+        resblock_dilation_sizes: List[tuple[int, int, int]],
         upsample_rates: List[int],
         upsample_initial_channel: int,
         upsample_kernel_sizes: List[int],
         spk_embed_dim: int,
         gin_channels: int,
         sr: Union[str, int],
-        is_half: bool = False,
+        is_half: bool,
+        txt_channels: int = 768,
         **kwargs: Any,
     ) -> None:
-        super(SynthesizerTrnMs256NSFsid, self).__init__()
+        super(SynthesizerTrnMsNSFsid, self).__init__()
         if isinstance(sr, str):
             if sr not in sr2sr:
                 raise ValueError(
@@ -69,7 +70,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         # self.hop_length = hop_length#
         self.spk_embed_dim = spk_embed_dim
         self.enc_p = TextEncoder(
-            256,
+            txt_channels,
             inter_channels,
             hidden_channels,
             filter_channels,
@@ -114,7 +115,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         if hasattr(self, "enc_q"):
             self.enc_q.remove_weight_norm()
 
-    def __prepare_scriptable__(self) -> "SynthesizerTrnMs256NSFsid":
+    def __prepare_scriptable__(self) -> "SynthesizerTrnMsNSFsid":
         for hook in self.dec._forward_pre_hooks.values():
             # The hook we want to remove is an instance of WeightNorm class, so
             # normally we would do `if isinstance(...)` but this class is not accessible
@@ -210,60 +211,3 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
             z = self.flow(z_p, x_mask, g=g, reverse=True)
         o = self.dec(z * x_mask, nsff0, g=g, n_res=return_length2)
         return o, x_mask, (z, z_p, m_p, logs_p)
-
-
-class SynthesizerTrnMs768NSFsid(SynthesizerTrnMs256NSFsid):
-    def __init__(
-        self,
-        spec_channels,
-        segment_size,
-        inter_channels,
-        hidden_channels,
-        filter_channels,
-        n_heads,
-        n_layers,
-        kernel_size,
-        p_dropout,
-        # resblock,
-        # resblock_kernel_sizes,
-        # resblock_dilation_sizes,
-        # upsample_rates,
-        # upsample_initial_channel,
-        # upsample_kernel_sizes,
-        # spk_embed_dim,
-        # gin_channels,
-        # sr,
-        **kwargs,
-    ):
-        super(SynthesizerTrnMs768NSFsid, self).__init__(
-            spec_channels,
-            segment_size,
-            inter_channels,
-            hidden_channels,
-            filter_channels,
-            n_heads,
-            n_layers,
-            kernel_size,
-            p_dropout,
-            # resblock,
-            # resblock_kernel_sizes,
-            # resblock_dilation_sizes,
-            # upsample_rates,
-            # upsample_initial_channel,
-            # upsample_kernel_sizes,
-            # spk_embed_dim,
-            # gin_channels,
-            # sr,
-            **kwargs,
-        )
-        del self.enc_p
-        self.enc_p = TextEncoder(
-            768,
-            inter_channels,
-            hidden_channels,
-            filter_channels,
-            n_heads,
-            n_layers,
-            kernel_size,
-            float(p_dropout),
-        )

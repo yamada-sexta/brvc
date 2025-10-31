@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "accelerate>=1.11.0",
     "datasets>=4.0.0",
     "gradio>=5.44.1",
     "jurigged>=0.6.1",
@@ -14,6 +15,7 @@ dependencies = [
     "torchcodec>=0.7.0",
     "torchcrepe>=0.0.24",
     "transformers>=4.56.1",
+    "typed-argument-parser>=1.11.0",
 ]
 [project.scripts]
 hello = "jurigged"
