@@ -9,9 +9,9 @@ from lib.utils.padding import get_padding
 
 
 class MultiPeriodDiscriminatorV2(nn.Module):
-    def __init__(self, use_spectral_norm=False, lrelu_slope: float = 0.1) -> None:
+    def __init__(self, use_spectral_norm: bool, lrelu_slope: float) -> None:
+        # relu_slope: float = 0.1
         super(MultiPeriodDiscriminatorV2, self).__init__()
-        # periods = [2, 3, 5, 7, 11, 17]
         periods = [2, 3, 5, 7, 11, 17, 23, 37]
 
         discs = [
@@ -19,7 +19,11 @@ class MultiPeriodDiscriminatorV2(nn.Module):
         ]
         discs = discs + [
             DiscriminatorP(
-                i, use_spectral_norm=use_spectral_norm, lrelu_slope=lrelu_slope
+                i,
+                kernel_size=5,
+                stride=3,
+                use_spectral_norm=use_spectral_norm,
+                lrelu_slope=lrelu_slope,
             )
             for i in periods
         ]
@@ -49,7 +53,7 @@ class MultiPeriodDiscriminatorV2(nn.Module):
 
 
 class DiscriminatorS(torch.nn.Module):
-    def __init__(self, use_spectral_norm=False, lrelu_slope: float = 0.1) -> None:
+    def __init__(self, use_spectral_norm: bool, lrelu_slope: float) -> None:
         super(DiscriminatorS, self).__init__()
         norm_f = weight_norm if use_spectral_norm == False else spectral_norm
         self.convs = nn.ModuleList(
@@ -82,11 +86,11 @@ class DiscriminatorS(torch.nn.Module):
 class DiscriminatorP(torch.nn.Module):
     def __init__(
         self,
-        period,
-        kernel_size=5,
-        stride=3,
-        use_spectral_norm=False,
-        lrelu_slope: float = 0.1,
+        period: int,
+        kernel_size: int,
+        stride: int,
+        use_spectral_norm: bool,
+        lrelu_slope: float,
     ) -> None:
         super(DiscriminatorP, self).__init__()
         self.period = period
