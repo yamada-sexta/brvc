@@ -60,17 +60,18 @@ def save_audio(
 
     if resample_sr:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=resample_sr)
-        wavfile.write(path, resample_sr, audio.astype(np.float32))
-    else:
-        wavfile.write(path, sr, audio.astype(np.float32))
-
+        sr = resample_sr
+        # wavfile.write(path, resample_sr, audio.astype(np.float32))
+    # else:
+        # wavfile.write(path, sr, audio.astype(np.float32))
+    wavfile.write(path, sr, audio.astype(np.float32))
 
 def process_file(
     path: str,
     idx: int,
     sr: int,
     slicer: Slicer,
-    filter_coeffs,
+    filter_coeffs: tuple[NDArray, NDArray],
     gt_wavs_dir: str,
     wavs16k_dir: str,
     per: float,
@@ -87,7 +88,7 @@ def process_file(
             logging.error(f"Failed to load audio: {path}")
             return
 
-        audio = signal.lfilter(b, a, audio)
+        audio: NDArray = signal.lfilter(b, a, audio)
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):
@@ -134,9 +135,12 @@ def preprocess_dataset(args: Args) -> None:
         hop_size=15,
         max_sil_kept=500,
     )
+    res = signal.butter(N=5, Wn=48, btype="high", fs=args.sample_rate)
+    if isinstance(res, tuple) and len(res) == 2:
+        b, a = res
+    else:
+        raise ValueError("Unexpected result from signal.butter")
     
-    b, a = signal.butter(N=5, Wn=48, btype="high", fs=args.sample_rate)
-
     gt_wavs_dir, wavs16k_dir = init_dirs(args.output_root)
     files = sorted(os.listdir(args.input_root))
 
