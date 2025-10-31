@@ -3,9 +3,10 @@ import torch
 import torch.nn as nn
 from typing import Literal, Optional, Tuple, Dict, Any, Union, List
 
-from lib.models.generator_nsf import GeneratorNSF
-from lib.models.res_block2 import RES_BLOCK_VERSION
-from lib.models.text_encoder import TextEncoder
+from lib.modules.generator_nsf import GeneratorNSF
+from lib.modules.posterior_encoder import PosteriorEncoder
+from lib.modules.res_block2 import RES_BLOCK_VERSION
+from lib.modules.text_encoder import TextEncoder
 import logging
 
 sr2sr: Dict[str, int] = {
@@ -13,7 +14,6 @@ sr2sr: Dict[str, int] = {
     "40k": 40000,
     "48k": 48000,
 }
-
 
 class SynthesizerTrnMs256NSFsid(nn.Module):
     def __init__(

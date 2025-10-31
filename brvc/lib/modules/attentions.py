@@ -5,8 +5,8 @@ from torch.nn import LayerNorm
 from typing import Optional, Tuple
 import math
 
-from lib.models.ffn import FFN
-from lib.models.multihead_attention import MultiHeadAttention
+from lib.modules.ffn import FFN
+from lib.modules.multihead_attention import MultiHeadAttention
 
 class Encoder(nn.Module):
     def __init__(

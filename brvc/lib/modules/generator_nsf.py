@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import ConvTranspose1d, Conv1d
 from torch.nn.utils import weight_norm, remove_weight_norm
-from lib.models.source_module_hn_nsf import SourceModuleHnNSF
-from lib.models.res_block2 import RES_BLOCK_VERSION, ResBlock2
+from lib.modules.source_module_hn_nsf import SourceModuleHnNSF
+from lib.modules.res_block2 import RES_BLOCK_VERSION, ResBlock2
 from lib.utils.misc import init_weights
 
 
