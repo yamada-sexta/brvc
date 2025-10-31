@@ -1,13 +1,12 @@
-from typing import Optional, Union
-
+from typing import Optional
 import numpy as np
 from numpy.typing import NDArray
 import torch
 import torchcrepe
 
-from .pitch_predictor import PitchPredictor
+from brvc.lib.features.pitch import pitch_predictor
 
-class CRePE(PitchPredictor):
+class CRePE(pitch_predictor.PitchPredictor):
     def __init__(
         self,
         hop_length=512,
@@ -64,3 +63,23 @@ class CRePE(PitchPredictor):
 
         interp, _ = self._interpolate_f0(self._resize_f0(f0, target_len))
         return interp
+
+
+def test():
+    import soundfile as sf
+
+    # Create a test sine wave file at 440 Hz for 1 second
+    sr = 44100
+    t = np.linspace(0, 1, sr, endpoint=False)
+    sine_wave = 0.5 * np.sin(2 * np.pi * 440 * t).astype(np.float32)
+    # Use the generated array directly instead of writing/reading a file
+    wav = sine_wave
+    # Convert to float32 if necessary
+    wav = wav.astype(np.float32)
+    pitch_extractor = CRePE(device="cpu")
+    f0 = pitch_extractor.compute_f0(wav)
+    print(f0)
+
+
+if __name__ == "__main__":
+    test()
