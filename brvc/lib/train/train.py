@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import sys
@@ -6,8 +7,12 @@ from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from accelerate.logging import get_logger
 
-from lib.train.utils.mel_processing import spec_to_mel_torch
+from lib.train.loss import discriminator_loss, feature_loss, generator_loss, kl_loss
+from lib.train.utils.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
+from lib.utils.misc import clip_grad_value_
 from lib.utils.slice import slice_segments
+
+import torch.nn.functional as F
 
 logger = get_logger(__name__)
 now_dir = os.getcwd()
@@ -278,17 +283,27 @@ def run_train(
             disable=not accelerator.is_main_process,
             desc=f"Epoch {epoch}/{args.epochs}",
         )
-        
+
         for batch_idx, batch in enumerate(progress_bar):
             # Unpack batch
-            phone, phone_lengths, pitch, pitchf, spec, spec_lengths, wave, wave_lengths, sid = batch
-            
+            (
+                phone,
+                phone_lengths,
+                pitch,
+                pitchf,
+                spec,
+                spec_lengths,
+                wave,
+                wave_lengths,
+                sid,
+            ) = batch
+
             # Forward generator
             with accelerator.autocast():
-                y_hat, ids_slice, x_mask, z_mask, (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(
-                    phone, phone_lengths, pitch, pitchf, spec, spec_lengths, sid
+                y_hat, ids_slice, x_mask, z_mask, (z, z_p, m_p, logs_p, m_q, logs_q) = (
+                    net_g(phone, phone_lengths, pitch, pitchf, spec, spec_lengths, sid)
                 )
-                
+
                 # Compute mel
                 mel = spec_to_mel_torch(
                     spec,
@@ -298,11 +313,13 @@ def run_train(
                     default_config["data"]["mel_fmin"],
                     default_config["data"]["mel_fmax"],
                 )
-                
+
                 y_mel = slice_segments(
-                    mel, ids_slice, default_config["train"]["segment_size"] // args.hop_length
+                    mel,
+                    ids_slice,
+                    default_config["train"]["segment_size"] // args.hop_length,
                 )
-                
+
                 y_hat_mel = mel_spectrogram_torch(
                     y_hat.float().squeeze(1),
                     default_config["data"]["filter_length"],
@@ -313,16 +330,126 @@ def run_train(
                     default_config["data"]["mel_fmin"],
                     default_config["data"]["mel_fmax"],
                 )
-                
+
                 if default_config["train"]["fp16_run"]:
                     y_hat_mel = y_hat_mel.half()
-                
+
                 wave = slice_segments(
-                    wave, ids_slice * args.hop_length, default_config["train"]["segment_size"]
+                    wave,
+                    ids_slice * args.hop_length,
+                    default_config["train"]["segment_size"],
                 )
-                
+
                 # Train Discriminator
                 y_d_hat_r, y_d_hat_g, _, _ = net_d(wave, y_hat.detach())
                 loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
                     y_d_hat_r, y_d_hat_g
                 )
+            optim_d.zero_grad()
+            accelerator.backward(loss_disc)
+            grad_norm_d = clip_grad_value_(net_d.parameters(), None)
+            optim_d.step()
+
+            with accelerator.autocast():
+                y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(wave, y_hat)
+
+                loss_mel = (
+                    F.l1_loss(y_mel, y_hat_mel) * default_config["train"]["c_mel"]
+                )
+                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * 1.0
+                loss_fm = feature_loss(fmap_r, fmap_g)
+                loss_gen, losses_gen = generator_loss(y_d_hat_g)
+                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_kl
+
+            optim_g.zero_grad()
+            accelerator.backward(loss_gen_all)
+            grad_norm_g = clip_grad_value_(net_g.parameters(), None)
+            optim_g.step()
+            global_step += 1
+
+            # Logging
+            if global_step % args.log_interval == 0 and accelerator.is_main_process:
+                lr = optim_g.param_groups[0]["lr"]
+
+                # Clamp extreme values for logging
+                loss_mel_log = min(loss_mel.item(), 75)
+                loss_kl_log = min(loss_kl.item(), 9)
+
+                log_msg = (
+                    f"Step {global_step} | Epoch {epoch} [{100.0 * batch_idx / len(train_loader):.0f}%] | "
+                    f"LR: {lr:.6f} | "
+                    f"D: {loss_disc.item():.3f} | "
+                    f"G: {loss_gen.item():.3f} | "
+                    f"FM: {loss_fm.item():.3f} | "
+                    f"Mel: {loss_mel_log:.3f} | "
+                    f"KL: {loss_kl_log:.3f}"
+                )
+                # accelerator.print(log_msg)
+                logger.info(log_msg, main_process_only=True)
+
+                # JSON metrics for parsing
+                metrics = {
+                    "step": global_step,
+                    "epoch": epoch,
+                    "lr": lr,
+                    "loss_disc": loss_disc.item(),
+                    "loss_gen": loss_gen.item(),
+                    "loss_gen_all": loss_gen_all.item(),
+                    "loss_fm": loss_fm.item(),
+                    "loss_mel": loss_mel.item(),
+                    "loss_kl": loss_kl.item(),
+                    "grad_norm_d": grad_norm_d,
+                    "grad_norm_g": grad_norm_g,
+                }
+                logger.info(f"METRICS: {json.dumps(metrics)}", main_process_only=True)
+
+            # Update progress bar
+            progress_bar.set_postfix(
+                {
+                    "D": f"{loss_disc.item():.2f}",
+                    "G": f"{loss_gen.item():.2f}",
+                    "Mel": f"{loss_mel.item():.2f}",
+                }
+            )
+
+        # Step schedulers
+        scheduler_g.step()
+        scheduler_d.step()
+
+        # Save checkpoint
+        if epoch % args.save_every_epoch == 0:
+            save_checkpoint(
+                accelerator,
+                net_g,
+                net_d,
+                optim_g,
+                optim_d,
+                epoch,
+                global_step,
+                args.model_dir,
+            )
+
+        accelerator.wait_for_everyone()
+
+        # Final save
+    if accelerator.is_main_process:
+        accelerator.print("Training completed!")
+        save_checkpoint(
+            accelerator,
+            net_g,
+            net_d,
+            optim_g,
+            optim_d,
+            args.epochs,
+            global_step,
+            args.model_dir,
+        )
+
+
+def main():
+    args = TrainArgs().parse_args()
+    run_train(args)
+
+
+if __name__ == "__main__":
+    main()

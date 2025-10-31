@@ -60,7 +60,9 @@ def spectrogram_torch(
     spec = torch.sqrt(spec.real.pow(2) + spec.imag.pow(2) + 1e-6)
     return spec
 
+
 from librosa.filters import mel as librosa_mel_fn
+
 
 def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
     """
@@ -70,10 +72,19 @@ def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
     """
     return torch.log(torch.clamp(x, min=clip_val) * C)
 
+
 def spectral_normalize_torch(magnitudes):
     return dynamic_range_compression_torch(magnitudes)
 
-def spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax):
+
+def spec_to_mel_torch(
+    spec: torch.Tensor,
+    n_fft: int,
+    num_mels: int,
+    sampling_rate: int,
+    fmin: float,
+    fmax: float,
+) -> torch.Tensor:
     # MelBasis - Cache if needed
     global mel_basis
     dtype_device = str(spec.dtype) + "_" + str(spec.device)
@@ -89,4 +100,31 @@ def spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax):
     # Mel-frequency Log-amplitude spectrogram :: (B, Freq=num_mels, Frame)
     melspec = torch.matmul(mel_basis[fmax_dtype_device], spec)
     melspec = spectral_normalize_torch(melspec)
+    return melspec
+
+
+def mel_spectrogram_torch(
+    y: torch.Tensor,
+    n_fft: int,
+    num_mels: int,
+    sampling_rate: int,
+    hop_size: int,
+    win_size: int,
+    fmin: float,
+    fmax: float,
+    center: bool = False,
+) -> torch.Tensor:
+    """Convert waveform into Mel-frequency Log-amplitude spectrogram.
+
+    Args:
+        y       :: (B, T)           - Waveforms
+    Returns:
+        melspec :: (B, Freq, Frame) - Mel-frequency Log-amplitude spectrogram
+    """
+    # Linear-frequency Linear-amplitude spectrogram :: (B, T) -> (B, Freq, Frame)
+    spec = spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center)
+
+    # Mel-frequency Log-amplitude spectrogram :: (B, Freq, Frame) -> (B, Freq=num_mels, Frame)
+    melspec = spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax)
+
     return melspec
