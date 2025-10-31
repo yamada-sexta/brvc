@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from lib.models.sine_gen import SineGen
+from lib.modules.sine_gen import SineGen
 
 
 class SourceModuleHnNSF(nn.Module):

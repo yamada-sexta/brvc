@@ -154,15 +154,19 @@ def save_checkpoint(
             save_dir / f"D_{global_step}.pth",
         )
 
-        accelerator.print(f"✓ Saved checkpoint at step {global_step}")
+        logger.info(f"✓ Saved checkpoint at step {global_step}")
 
 
-def load_pretrained(model: torch.nn.Module, path: str, accelerator: Accelerator):
+def load_pretrained(
+    model: torch.nn.Module, path: str, accelerator: Accelerator
+) -> None:
     """Load pretrained weights."""
     if not path or not os.path.exists(path):
+        logger.warning(f"Pretrained path {path} does not exist. Skipping load.")
         return
 
-    accelerator.print(f"Loading pretrained from {path}")
+    # accelerator.print(f"Loading pretrained from {path}")
+    logger.info(f"Loading pretrained from {path}", main_process_only=True)
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     state_dict = ckpt["model"] if "model" in ckpt else ckpt
 
