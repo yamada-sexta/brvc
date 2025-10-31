@@ -1,16 +1,21 @@
-from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 import torch
 import numpy as np
+import abc
+from numpy.typing import NDArray
 
 
-class F0Predictor(ABC):
+class PitchPredictor(abc.ABC):
     """
-    An abstract base class for F0 (fundamental frequency) predictors.
+    Abstract base class for frame-wise pitch (f0) prediction.
 
-    Subclasses must implement the `compute_f0` method.
+    Subclasses must implement `compute_f0` which takes a waveform and returns a
+    1-D numpy array of f0 values (Hz) for each frame. Unvoiced frames should be
+    represented as 0.
     """
+
+    device: torch.device
 
     def __init__(
         self,
@@ -18,44 +23,31 @@ class F0Predictor(ABC):
         f0_min: int = 50,
         f0_max: int = 1100,
         sampling_rate: int = 44100,
-        device: Optional[str] = None,
+        device: Optional[Union[str, torch.device]] = None,
     ):
-        """
-        Initializes the F0 predictor.
-
-        Args:
-            hop_length (int): The number of samples between successive analysis frames.
-            f0_min (int): Minimum F0 to search for, in Hz.
-            f0_max (int): Maximum F0 to search for, in Hz.
-            sampling_rate (int): The audio sampling rate.
-            device (Optional[str]): The device to use for computation (e.g., "cpu", "cuda:0").
-                                   Defaults to GPU if available, otherwise CPU.
-        """
         self.hop_length = hop_length
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.sampling_rate = sampling_rate
         if device is None:
-            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
 
-    @abstractmethod
+    # Abstract method
+    @abc.abstractmethod
+    @torch.no_grad()
     def compute_f0(
         self,
-        wav: torch.Tensor,
+        wav: NDArray[np.float32],
         p_len: Optional[int] = None,
-    ) -> torch.Tensor:
+    ) -> NDArray[np.float32]:
         """
-        Computes the fundamental frequency (F0) from a waveform.
-
-        This method must be implemented by any subclass.
-        """
-        raise NotImplementedError
+        Compute the f0 contour from the input waveform.
+        Should be implemented by subclasses."""
 
     def _interpolate_f0(self, f0: np.ndarray):
         """
-        Interpolate f0
+        Interpolate the unvoiced regions of the f0 contour using linear interpolation.
         """
 
         data = np.reshape(f0, (f0.size, 1))
@@ -86,18 +78,20 @@ class F0Predictor(ABC):
                     for k in range(i, frame_number):
                         ip_data[k] = last_value
             else:
-                ip_data[i] = data[i]  # 这里可能存在一个没有必要的拷贝
+                ip_data[i] = data[i]  # This might be redundant
                 last_value = data[i]
 
         return ip_data[:, 0], vuv_vector[:, 0]
 
-    def _resize_f0(self, x: np.ndarray, target_len: int):
-        source = np.array(x)
+    def _resize_f0(self, x: NDArray[np.float32], target_len: int) -> NDArray[np.float32]:
+        # Ensure source is float32 to match the annotated input type.
+        source = np.array(x, dtype=np.float32)
         source[source < 0.001] = np.nan
+        # np.interp returns float64 by default, so cast the final result back to float32
         target = np.interp(
             np.arange(0, len(source) * target_len, len(source)) / target_len,
             np.arange(0, len(source)),
             source,
         )
-        res = np.nan_to_num(target)
+        res = np.nan_to_num(target).astype(np.float32)
         return res

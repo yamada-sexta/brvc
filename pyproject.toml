@@ -12,6 +12,7 @@ dependencies = [
     "torch>=2.8.0",
     "torchaudio>=2.8.0",
     "torchcodec>=0.7.0",
+    "torchcrepe>=0.0.24",
     "transformers>=4.56.1",
 ]
 [project.scripts]
