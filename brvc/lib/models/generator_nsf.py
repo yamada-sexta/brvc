@@ -1,3 +1,4 @@
+import logging
 import math
 from typing import Literal, Optional
 import torch
@@ -6,7 +7,7 @@ import torch.nn.functional as F
 from torch.nn import ConvTranspose1d, Conv1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 from lib.models.source_module_hn_nsf import SourceModuleHnNSF
-from lib.models.res_block2 import ResBlock2
+from lib.models.res_block2 import RES_BLOCK_VERSION, ResBlock2
 from lib.utils.misc import init_weights
 
 
@@ -14,7 +15,7 @@ class GeneratorNSF(nn.Module):
     def __init__(
         self,
         initial_channel: int,
-        resblock_version: Literal["1", "2"],
+        resblock_version: RES_BLOCK_VERSION,
         resblock_kernel_sizes: list[int],
         resblock_dilation_sizes: list[int],
         upsample_rates: list[int],
@@ -157,7 +158,10 @@ class GeneratorNSF(nn.Module):
         for l in self.ups:
             remove_weight_norm(l)
         for l in self.resblocks:
-            l.remove_weight_norm()
+            # l.remove_weight_norm()
+            logging.debug("Make sure it is a module with remove_weight_norm method")
+            # Disable type checker for the next line
+            l.remove_weight_norm()  # type: ignore
 
     def __prepare_scriptable__(self):
         for l in self.ups:

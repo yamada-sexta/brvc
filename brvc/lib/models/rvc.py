@@ -1,16 +1,19 @@
-
 import torch
 
 import torch.nn as nn
-from typing import Optional, Tuple, Dict, Any, Union, List
+from typing import Literal, Optional, Tuple, Dict, Any, Union, List
 
+from lib.models.generator_nsf import GeneratorNSF
+from lib.models.res_block2 import RES_BLOCK_VERSION
 from lib.models.text_encoder import TextEncoder
 import logging
+
 sr2sr: Dict[str, int] = {
     "32k": 32000,
     "40k": 40000,
     "48k": 48000,
 }
+
 
 class SynthesizerTrnMs256NSFsid(nn.Module):
     def __init__(
@@ -23,10 +26,10 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         n_heads: int,
         n_layers: int,
         kernel_size: int,
-        p_dropout: Union[float, int],
-        resblock: str,
+        p_dropout: float,
+        resblock_version: RES_BLOCK_VERSION,
         resblock_kernel_sizes: List[int],
-        resblock_dilation_sizes: List[List[int]],
+        resblock_dilation_sizes: List[int],
         upsample_rates: List[int],
         upsample_initial_channel: int,
         upsample_kernel_sizes: List[int],
@@ -37,6 +40,8 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
     ) -> None:
         super(SynthesizerTrnMs256NSFsid, self).__init__()
         if isinstance(sr, str):
+            if sr not in sr2sr:
+                raise ValueError(f"Unsupported sr: {sr}. Supported srs are {list(sr2sr.keys())}.")
             sr = sr2sr[sr]
         self.spec_channels = spec_channels
         self.inter_channels = inter_channels
@@ -46,7 +51,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         self.n_layers = n_layers
         self.kernel_size = kernel_size
         self.p_dropout = float(p_dropout)
-        self.resblock = resblock
+        self.resblock = resblock_version
         self.resblock_kernel_sizes = resblock_kernel_sizes
         self.resblock_dilation_sizes = resblock_dilation_sizes
         self.upsample_rates = upsample_rates
@@ -68,7 +73,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         )
         self.dec = GeneratorNSF(
             inter_channels,
-            resblock,
+            resblock_version,
             resblock_kernel_sizes,
             resblock_dilation_sizes,
             upsample_rates,
@@ -91,7 +96,9 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
             inter_channels, hidden_channels, 5, 1, 3, gin_channels=gin_channels
         )
         self.emb_g = nn.Embedding(self.spk_embed_dim, gin_channels)
-        logging.debug(f"gin_channels: {gin_channels}, self.spk_embed_dim: {self.spk_embed_dim}")
+        logging.debug(
+            f"gin_channels: {gin_channels}, self.spk_embed_dim: {self.spk_embed_dim}"
+        )
 
     def remove_weight_norm(self) -> None:
         self.dec.remove_weight_norm()
@@ -135,9 +142,24 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         y: torch.Tensor,
         y_lengths: torch.Tensor,
         ds: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:  # ds here is the id tensor, shape [bs, 1]
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Tuple[
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+        ],
+    ]:  # ds here is the id tensor, shape [bs, 1]
         # print(1,pitch.shape)#[bs,t]
-        g = self.emb_g(ds).unsqueeze(-1)  # [b, 256, 1] -> 1 is time dimension and will be broadcast
+        g = self.emb_g(ds).unsqueeze(
+            -1
+        )  # [b, 256, 1] -> 1 is time dimension and will be broadcast
         m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
         z_p = self.flow(z, y_mask, g=g)

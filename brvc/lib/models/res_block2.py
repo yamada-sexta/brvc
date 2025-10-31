@@ -1,3 +1,4 @@
+from typing_extensions import Literal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,6 +7,10 @@ from typing import Optional
 from torch.nn import Conv1d
 
 from lib.utils.misc import get_padding, init_weights
+
+# Type of ResBlock version is a Literal["1", "2"]
+# Declaring the RES_BLOCK_VERSION type
+RES_BLOCK_VERSION = Literal["1", "2"]
 
 
 class ResBlock2(torch.nn.Module):
