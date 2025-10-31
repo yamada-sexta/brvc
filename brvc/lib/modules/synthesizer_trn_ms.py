@@ -89,6 +89,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
             gin_channels=gin_channels,
             sr=sr,
             is_half=is_half,
+            lrelu_slope=0.1,
         )
         self.enc_q = PosteriorEncoder(
             spec_channels,
