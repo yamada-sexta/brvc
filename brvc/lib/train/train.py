@@ -6,6 +6,7 @@ from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from accelerate.logging import get_logger
 
+from lib.train.utils.mel_processing import spec_to_mel_torch
 from lib.utils.slice import slice_segments
 
 logger = get_logger(__name__)

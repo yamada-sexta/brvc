@@ -59,3 +59,34 @@ def spectrogram_torch(
     # Linear-frequency Linear-amplitude spectrogram :: (B, Freq, Frame, RealComplex=2) -> (B, Freq, Frame)
     spec = torch.sqrt(spec.real.pow(2) + spec.imag.pow(2) + 1e-6)
     return spec
+
+from librosa.filters import mel as librosa_mel_fn
+
+def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
+    """
+    PARAMS
+    ------
+    C: compression factor
+    """
+    return torch.log(torch.clamp(x, min=clip_val) * C)
+
+def spectral_normalize_torch(magnitudes):
+    return dynamic_range_compression_torch(magnitudes)
+
+def spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax):
+    # MelBasis - Cache if needed
+    global mel_basis
+    dtype_device = str(spec.dtype) + "_" + str(spec.device)
+    fmax_dtype_device = str(fmax) + "_" + dtype_device
+    if fmax_dtype_device not in mel_basis:
+        mel = librosa_mel_fn(
+            sr=sampling_rate, n_fft=n_fft, n_mels=num_mels, fmin=fmin, fmax=fmax
+        )
+        mel_basis[fmax_dtype_device] = torch.from_numpy(mel).to(
+            dtype=spec.dtype, device=spec.device
+        )
+
+    # Mel-frequency Log-amplitude spectrogram :: (B, Freq=num_mels, Frame)
+    melspec = torch.matmul(mel_basis[fmax_dtype_device], spec)
+    melspec = spectral_normalize_torch(melspec)
+    return melspec
