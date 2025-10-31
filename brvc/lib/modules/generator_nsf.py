@@ -23,8 +23,8 @@ class GeneratorNSF(nn.Module):
         upsample_kernel_sizes: list[int],
         gin_channels: int,
         sr: int,
-        is_half: bool = False,
-        lrelu_slope: float = 0.1,
+        is_half: bool,
+        lrelu_slope: float,
     ):
         super(GeneratorNSF, self).__init__()
         self.num_kernels = len(resblock_kernel_sizes)
@@ -32,7 +32,12 @@ class GeneratorNSF(nn.Module):
 
         self.f0_upsamp = nn.Upsample(scale_factor=math.prod(upsample_rates))
         self.m_source = SourceModuleHnNSF(
-            sampling_rate=sr, harmonic_num=0, is_half=is_half
+            sampling_rate=sr,
+            harmonic_num=0,
+            sine_amp=0.1,
+            add_noise_std=0.003,
+            voiced_threshod=0,
+            is_half=is_half,
         )
         self.noise_convs = nn.ModuleList()
         self.conv_pre = Conv1d(

@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from lib.models.sine_gen import SineGen
 
+
 class SourceModuleHnNSF(torch.nn.Module):
     """SourceModule for hn-nsf
     SourceModule(sampling_rate, harmonic_num=0, sine_amp=0.1,
@@ -24,12 +25,19 @@ class SourceModuleHnNSF(torch.nn.Module):
     def __init__(
         self,
         sampling_rate,
+        harmonic_num: int,
+        sine_amp: float,
+        add_noise_std: float,
+        voiced_threshod: float,
+        is_half: bool,
+    ):
+        """
         harmonic_num=0,
         sine_amp=0.1,
         add_noise_std=0.003,
         voiced_threshod=0,
         is_half=True,
-    ):
+        """
         super(SourceModuleHnNSF, self).__init__()
 
         self.sine_amp = sine_amp
@@ -76,6 +84,7 @@ def test():
     print(sine_merge.shape)
     print(noise)
     print(uv)
+
 
 if __name__ == "__main__":
     test()
