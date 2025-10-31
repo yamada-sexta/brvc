@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, Tuple
 import math
 
-from lib.models import attentions
+from lib.modules.attentions import Encoder
+from lib.utils.misc import sequence_mask
 
 
 class TextEncoder(nn.Module):
@@ -31,7 +32,7 @@ class TextEncoder(nn.Module):
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
         if f0 == True:
             self.emb_pitch = nn.Embedding(256, hidden_channels)  # pitch 256
-        self.encoder = attentions.Encoder(
+        self.encoder = Encoder(
             hidden_channels,
             filter_channels,
             n_heads,
@@ -47,7 +48,7 @@ class TextEncoder(nn.Module):
         pitch: torch.Tensor,
         lengths: torch.Tensor,
         skip_head: Optional[torch.Tensor] = None,
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if pitch is None:
             x = self.emb_phone(phone)
         else:
@@ -55,7 +56,7 @@ class TextEncoder(nn.Module):
         x = x * math.sqrt(self.hidden_channels)  # [b, t, h]
         x = self.lrelu(x)
         x = torch.transpose(x, 1, -1)  # [b, h, t]
-        x_mask = torch.unsqueeze(commons.sequence_mask(lengths, x.size(2)), 1).to(
+        x_mask = torch.unsqueeze(sequence_mask(lengths, x.size(2)), 1).to(
             x.dtype
         )
         x = self.encoder(x * x_mask, x_mask)

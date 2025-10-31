@@ -24,6 +24,7 @@ class GeneratorNSF(nn.Module):
         gin_channels: int,
         sr: int,
         is_half: bool = False,
+        lrelu_slope: float = 0.1,
     ):
         super(GeneratorNSF, self).__init__()
         self.num_kernels = len(resblock_kernel_sizes)
@@ -47,7 +48,7 @@ class GeneratorNSF(nn.Module):
 
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
-            c_prev: int = upsample_initial_channel // (2 ** i)
+            c_prev: int = upsample_initial_channel // (2**i)
             c_cur: int = upsample_initial_channel // (2 ** (i + 1))
             self.ups.append(
                 weight_norm(
@@ -83,11 +84,13 @@ class GeneratorNSF(nn.Module):
                 )
             else:
                 # self.noise_convs.append(Conv1d(1, c_cur, kernel_size=1))
-                self.noise_convs.append(Conv1d(
-                    in_channels=1,
-                    out_channels=c_cur,
-                    kernel_size=1,
-                ))
+                self.noise_convs.append(
+                    Conv1d(
+                        in_channels=1,
+                        out_channels=c_cur,
+                        kernel_size=1,
+                    )
+                )
         self.resblocks = nn.ModuleList()
 
         ch: int = upsample_initial_channel  # Fix type checker error
@@ -96,7 +99,11 @@ class GeneratorNSF(nn.Module):
             for j, (k, d) in enumerate(
                 zip(resblock_kernel_sizes, resblock_dilation_sizes)
             ):
-                self.resblocks.append(res_block(ch, k, d))
+                self.resblocks.append(
+                    res_block(
+                        channels=ch, kernel_size=k, dilation=d, lrelu_slope=lrelu_slope
+                    )
+                )
 
         self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
         self.ups.apply(init_weights)
@@ -105,9 +112,7 @@ class GeneratorNSF(nn.Module):
             self.cond = nn.Conv1d(gin_channels, upsample_initial_channel, 1)
 
         self.upp = math.prod(upsample_rates)
-
-        LRELU_SLOPE = 0.1
-        self.lrelu_slope = LRELU_SLOPE
+        self.lrelu_slope = lrelu_slope
 
     def forward(
         self,

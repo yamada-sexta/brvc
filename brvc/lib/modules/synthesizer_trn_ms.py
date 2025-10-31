@@ -18,6 +18,7 @@ sr2sr: Dict[str, int] = {
     "48k": 48000,
 }
 
+
 class SynthesizerTrnMs256NSFsid(nn.Module):
     def __init__(
         self,
@@ -45,7 +46,9 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         super(SynthesizerTrnMs256NSFsid, self).__init__()
         if isinstance(sr, str):
             if sr not in sr2sr:
-                raise ValueError(f"Unsupported sr: {sr}. Supported srs are {list(sr2sr.keys())}.")
+                raise ValueError(
+                    f"Unsupported sr: {sr}. Supported srs are {list(sr2sr.keys())}."
+                )
             sr = sr2sr[sr]
         self.spec_channels = spec_channels
         self.inter_channels = inter_channels
@@ -161,19 +164,17 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         ],
     ]:  # ds here is the id tensor, shape [bs, 1]
         # print(1,pitch.shape)#[bs,t]
-        g = self.emb_g(ds).unsqueeze(
+        g: torch.Tensor = self.emb_g(ds).unsqueeze(
             -1
         )  # [b, 256, 1] -> 1 is time dimension and will be broadcast
         m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
         z_p = self.flow(z, y_mask, g=g)
-        z_slice, ids_slice = rand_slice_segments(
-            z, y_lengths, self.segment_size
-        )
+        z_slice, ids_slice = rand_slice_segments(z, y_lengths, self.segment_size)
         # print(-1,pitchf.shape,ids_slice,self.segment_size,self.hop_length,self.segment_size//self.hop_length)
         pitchf = slice_segments2(pitchf, ids_slice, self.segment_size)
         # print(-2,pitchf.shape,z_slice.shape)
-        o = self.dec(z_slice, pitchf, g=g)
+        o: torch.Tensor = self.dec(z_slice, pitchf, g=g)
         return o, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
     @torch.jit.export

@@ -1,7 +1,9 @@
-
 import torch
 import torch.nn as nn
 from typing import Optional
+
+from lib.utils.misc import fused_add_tanh_sigmoid_multiply
+
 
 class WN(torch.nn.Module):
     def __init__(
@@ -74,7 +76,7 @@ class WN(torch.nn.Module):
             else:
                 g_l = torch.zeros_like(x_in)
 
-            acts = commons.fused_add_tanh_sigmoid_multiply(x_in, g_l, n_channels_tensor)
+            acts = fused_add_tanh_sigmoid_multiply(x_in, g_l, n_channels_tensor)
             acts = self.drop(acts)
 
             res_skip_acts = res_skip_layer(acts)
