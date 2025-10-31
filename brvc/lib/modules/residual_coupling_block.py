@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, Tuple
 
 from lib.modules.flip import Flip
 from lib.modules.wn import WN
@@ -47,7 +47,7 @@ class ResidualCouplingBlock(nn.Module):
         x_mask: torch.Tensor,
         g: Optional[torch.Tensor] = None,
         reverse: bool = False,
-    ):
+    ) -> torch.Tensor:
         if not reverse:
             for flow in self.flows:
                 x, _ = flow(x, x_mask, g=g, reverse=reverse)
@@ -56,11 +56,15 @@ class ResidualCouplingBlock(nn.Module):
                 x, _ = flow.forward(x, x_mask, g=g, reverse=reverse)
         return x
 
-    def remove_weight_norm(self):
+    def remove_weight_norm(self) -> None:
         for i in range(self.n_flows):
-            self.flows[i * 2].remove_weight_norm()
+            m = self.flows[i * 2]
+            if hasattr(m, "remove_weight_norm") and callable(
+                getattr(m, "remove_weight_norm")
+            ):
+                m.remove_weight_norm()  # type: ignore
 
-    def __prepare_scriptable__(self):
+    def __prepare_scriptable__(self) -> "ResidualCouplingBlock":
         for i in range(self.n_flows):
             for hook in self.flows[i * 2]._forward_pre_hooks.values():
                 if (
@@ -114,7 +118,7 @@ class ResidualCouplingLayer(nn.Module):
         x_mask: torch.Tensor,
         g: Optional[torch.Tensor] = None,
         reverse: bool = False,
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         x0, x1 = torch.split(x, [self.half_channels] * 2, 1)
         h = self.pre(x0) * x_mask
         h = self.enc(h, x_mask, g=g)
@@ -135,10 +139,10 @@ class ResidualCouplingLayer(nn.Module):
             x = torch.cat([x0, x1], 1)
             return x, torch.zeros([1])
 
-    def remove_weight_norm(self):
+    def remove_weight_norm(self) -> None:
         self.enc.remove_weight_norm()
 
-    def __prepare_scriptable__(self):
+    def __prepare_scriptable__(self) -> "ResidualCouplingLayer":
         for hook in self.enc._forward_pre_hooks.values():
             if (
                 hook.__module__ == "torch.nn.utils.weight_norm"

@@ -6,6 +6,7 @@ from typing import Literal, Optional, Tuple, Dict, Any, Union, List
 from lib.modules.generator_nsf import GeneratorNSF
 from lib.modules.posterior_encoder import PosteriorEncoder
 from lib.modules.res_block2 import RES_BLOCK_VERSION
+from lib.modules.residual_coupling_block import ResidualCouplingBlock
 from lib.modules.text_encoder import TextEncoder
 import logging
 
