@@ -69,27 +69,31 @@ class TrainArgs(Tap):
     """Training arguments."""
     ngpu: int = 1 # Number of GPUs to use
     seed: int = 1234 # Random seed
-    
+    sample_rate: int = 48000 # Sampling rate
     train_filelist: str = "filelists/train.txt" # Path to training filelist
-
+    hop_length: int = 480 # Hop length
+    win_length: int = 2048 # Window length
+    max_text_len: int = 5000 # Maximum text length
+    min_text_len: int = 1 # Minimum text length
+    max_wav_value: float = 32768.0 # Maximum waveform value
+    filter_length: int = 2048 # Filter length
+    
 def run_train(
     args: TrainArgs,
 ):
     accelerator = Accelerator()
     
-    filter_length = default_config["data"]["filter_length"] // 2 + 1
-    
-    
     train_dataset = TextAudioLoaderMultiNSFsid(
         audiopaths_and_text=args.train_filelist,
-        max_wav_value=32768.0,
-        sampling_rate=48000,
-        filter_length=filter_length,
-        hop_length=480,
-        win_length=2048,
-        max_text_len=5000,
-        min_text_len=1,
+        max_wav_value=args.max_wav_value,
+        sampling_rate=args.sample_rate,
+        filter_length=args.filter_length,
+        hop_length=args.hop_length,
+        win_length=args.win_length,
+        max_text_len=args.max_text_len,
+        min_text_len=args.min_text_len,
     )
+    
     logging.info(f"Training dataset size: {len(train_dataset)}")
     collate_fn = TextAudioCollateMultiNSFsid()
     
@@ -106,8 +110,8 @@ def run_train(
     m = default_config["model"]
     
     net_g = SynthesizerTrnMsNSFsid(
-        spec_channels=filter_length // 2 + 1,
-        segment_size=default_config["train"]["segment_size"] // default_config["data"]["hop_length"],
+        spec_channels=args.filter_length // 2 + 1,
+        segment_size=default_config["train"]["segment_size"] // args.hop_length,
         inter_channels=m["inter_channels"],
         hidden_channels=m["hidden_channels"],
         filter_channels=m["filter_channels"],
