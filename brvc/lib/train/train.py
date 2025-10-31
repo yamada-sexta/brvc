@@ -1,10 +1,14 @@
-import json
 import os
+from pathlib import Path
 import sys
-import logging
-
+from accelerate.utils import set_seed
+from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
-logger = logging.getLogger(__name__)
+from accelerate.logging import get_logger
+
+from lib.utils.slice import slice_segments
+
+logger = get_logger(__name__)
 now_dir = os.getcwd()
 sys.path.append(os.path.join(now_dir))
 import datetime
@@ -15,74 +19,169 @@ from tap import Tap
 from accelerate import Accelerator
 
 default_config = {
-  "train": {
-    "log_interval": 200,
-    "seed": 1234,
-    "epochs": 20000,
-    "learning_rate": 1e-4,
-    "betas": [0.8, 0.99],
-    "eps": 1e-9,
-    "batch_size": 4,
-    "fp16_run": True,
-    "lr_decay": 0.999875,
-    "segment_size": 17280,
-    "init_lr_ratio": 1,
-    "warmup_epochs": 0,
-    "c_mel": 45,
-    "c_kl": 1.0
-  },
-  "data": {
-    "max_wav_value": 32768.0,
-    "sampling_rate": 48000,
-    "filter_length": 2048,
-    "hop_length": 480,
-    "win_length": 2048,
-    "n_mel_channels": 128,
-    "mel_fmin": 0.0,
-    "mel_fmax": None
-  },
-  "model": {
-    "inter_channels": 192,
-    "hidden_channels": 192,
-    "filter_channels": 768,
-    "n_heads": 2,
-    "n_layers": 6,
-    "kernel_size": 3,
-    "p_dropout": 0,
-    "resblock": "1",
-    "resblock_kernel_sizes": [3,7,11],
-    "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],
-    "upsample_rates": [12,10,2,2],
-    "upsample_initial_channel": 512,
-    "upsample_kernel_sizes": [24,20,4,4],
-    "use_spectral_norm": False,
-    "gin_channels": 256,
-    "spk_embed_dim": 109
-  }
+    "train": {
+        "log_interval": 200,
+        "seed": 1234,
+        "epochs": 20000,
+        "learning_rate": 1e-4,
+        "betas": [0.8, 0.99],
+        "eps": 1e-9,
+        "batch_size": 4,
+        "fp16_run": True,
+        "lr_decay": 0.999875,
+        "segment_size": 17280,
+        "init_lr_ratio": 1,
+        "warmup_epochs": 0,
+        "c_mel": 45,
+        "c_kl": 1.0,
+    },
+    "data": {
+        "max_wav_value": 32768.0,
+        "sampling_rate": 48000,
+        "filter_length": 2048,
+        "hop_length": 480,
+        "win_length": 2048,
+        "n_mel_channels": 128,
+        "mel_fmin": 0.0,
+        "mel_fmax": None,
+    },
+    "model": {
+        "inter_channels": 192,
+        "hidden_channels": 192,
+        "filter_channels": 768,
+        "n_heads": 2,
+        "n_layers": 6,
+        "kernel_size": 3,
+        "p_dropout": 0,
+        "resblock": "1",
+        "resblock_kernel_sizes": [3, 7, 11],
+        "resblock_dilation_sizes": [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        "upsample_rates": [12, 10, 2, 2],
+        "upsample_initial_channel": 512,
+        "upsample_kernel_sizes": [24, 20, 4, 4],
+        "use_spectral_norm": False,
+        "gin_channels": 256,
+        "spk_embed_dim": 109,
+    },
 }
-
 
 
 from lib.train.utils.data import TextAudioCollateMultiNSFsid, TextAudioLoaderMultiNSFsid
 from torch.utils.data import DataLoader
+from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
+from lib.modules.discriminators import MultiPeriodDiscriminatorV2
+
+
 class TrainArgs(Tap):
     """Training arguments."""
-    ngpu: int = 1 # Number of GPUs to use
-    seed: int = 1234 # Random seed
-    sample_rate: int = 48000 # Sampling rate
-    train_filelist: str = "filelists/train.txt" # Path to training filelist
-    hop_length: int = 480 # Hop length
-    win_length: int = 2048 # Window length
-    max_text_len: int = 5000 # Maximum text length
-    min_text_len: int = 1 # Minimum text length
-    max_wav_value: float = 32768.0 # Maximum waveform value
-    filter_length: int = 2048 # Filter length
-    
+
+    # Required
+    train_filelist: str = "filelists/train.txt"  # Path to training filelist
+    model_dir: str = "logs/model"  # Directory to save checkpoints
+
+    # Training
+    epochs: int = 20000  # Number of epochs
+    batch_size: int = 4  # Batch size per GPU
+    learning_rate: float = 1e-4  # Learning rate
+    lr_decay: float = 0.999875  # Learning rate decay
+    seed: int = 1234  # Random seed
+
+    # Data
+    sample_rate: int = 48000  # Sampling rate
+    hop_length: int = 480  # Hop length
+    win_length: int = 2048  # Window length
+    max_text_len: int = 5000  # Maximum text length
+    min_text_len: int = 1  # Minimum text length
+    max_wav_value: float = 32768.0  # Maximum waveform value
+    filter_length: int = 2048  # Filter length
+
+    # Optimizer
+    eps: float = 1e-9  # Epsilon for optimizer
+    betas: tuple = (0.8, 0.99)  # Betas for optimizer
+
+    # Checkpointing
+    save_every_epoch: int = 10  # Save checkpoint every N epochs
+    log_interval: int = 200  # Log every N steps
+    pretrain_g: str = ""  # Pretrained generator path
+    pretrain_d: str = ""  # Pretrained discriminator path
+
+    # Data loading
+    num_workers: int = 4
+    prefetch_factor: int = 8
+
+
+def save_checkpoint(
+    accelerator: Accelerator,
+    net_g: torch.nn.Module,
+    net_d: torch.nn.Module,
+    optim_g: torch.optim.Optimizer,
+    optim_d: torch.optim.Optimizer,
+    epoch: int,
+    global_step: int,
+    model_dir: str,
+):
+    """Save checkpoint."""
+    if accelerator.is_main_process:
+        save_dir = Path(model_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        unwrapped_g = accelerator.unwrap_model(net_g)
+        unwrapped_d = accelerator.unwrap_model(net_d)
+
+        torch.save(
+            {
+                "model": unwrapped_g.state_dict(),
+                "optimizer": optim_g.state_dict(),
+                "epoch": epoch,
+                "global_step": global_step,
+            },
+            save_dir / f"G_{global_step}.pth",
+        )
+
+        torch.save(
+            {
+                "model": unwrapped_d.state_dict(),
+                "optimizer": optim_d.state_dict(),
+                "epoch": epoch,
+                "global_step": global_step,
+            },
+            save_dir / f"D_{global_step}.pth",
+        )
+
+        accelerator.print(f"✓ Saved checkpoint at step {global_step}")
+
+
+def load_pretrained(model: torch.nn.Module, path: str, accelerator: Accelerator):
+    """Load pretrained weights."""
+    if not path or not os.path.exists(path):
+        return
+
+    accelerator.print(f"Loading pretrained from {path}")
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    state_dict = ckpt["model"] if "model" in ckpt else ckpt
+
+    unwrapped = accelerator.unwrap_model(model)
+    unwrapped.load_state_dict(state_dict)
+
+
 def run_train(
     args: TrainArgs,
 ):
-    accelerator = Accelerator()
-    
+    """Main training function."""
+
+    # Initialize accelerator
+    accelerator = Accelerator(
+        mixed_precision="fp16" if default_config["train"]["fp16_run"] else "no",
+        gradient_accumulation_steps=1,
+    )
+
+    set_seed(args.seed)
+
+    # Create model directory
+    if accelerator.is_main_process:
+        os.makedirs(args.model_dir, exist_ok=True)
+
+    # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
         audiopaths_and_text=args.train_filelist,
         max_wav_value=args.max_wav_value,
@@ -93,22 +192,23 @@ def run_train(
         max_text_len=args.max_text_len,
         min_text_len=args.min_text_len,
     )
-    
-    logging.info(f"Training dataset size: {len(train_dataset)}")
+
+    logger.info(f"Training samples: {len(train_dataset)}", main_process_only=True)
+
     collate_fn = TextAudioCollateMultiNSFsid()
-    
+
     train_loader = DataLoader(
         train_dataset,
         num_workers=4,
         shuffle=False,
         pin_memory=True,
         collate_fn=collate_fn,
-        # batch_sampler=train_sampler,
         persistent_workers=True,
         prefetch_factor=8,
     )
+
+    # Models
     m = default_config["model"]
-    
     net_g = SynthesizerTrnMsNSFsid(
         spec_channels=args.filter_length // 2 + 1,
         segment_size=default_config["train"]["segment_size"] // args.hop_length,
@@ -131,9 +231,97 @@ def run_train(
         is_half=default_config["train"]["fp16_run"],
         txt_channels=768,
     )
-    
-    model, optimizer, train_dataloader, scheduler = accelerator.prepare(
-    
+
+    net_d = MultiPeriodDiscriminatorV2(use_spectral_norm=False, lrelu_slope=0.1)
+
+    # Optimizers
+    optim_g = torch.optim.AdamW(
+        net_g.parameters(),
+        lr=args.learning_rate,
+        betas=args.betas,
+        eps=args.eps,
     )
 
-    train_sampler = torch.utils.data.DistributedSampler(train_dataset)
+    optim_d = torch.optim.AdamW(
+        net_d.parameters(),
+        lr=args.learning_rate,
+        betas=args.betas,
+        eps=args.eps,
+    )
+
+    # Schedulers
+    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=args.lr_decay)
+    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=args.lr_decay)
+
+    # Prepare with accelerator
+    net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d = (
+        accelerator.prepare(
+            net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d
+        )
+    )
+
+    # Load pretrained
+    if args.pretrain_g:
+        load_pretrained(net_g, args.pretrain_g, accelerator)
+    if args.pretrain_d:
+        load_pretrained(net_d, args.pretrain_d, accelerator)
+    # Training loop
+    global_step = 0
+    logger.info(f"Starting training for {args.epochs} epochs")
+    for epoch in range(1, args.epochs + 1):
+        net_g.train()
+        net_d.train()
+
+        progress_bar = tqdm(
+            train_loader,
+            disable=not accelerator.is_main_process,
+            desc=f"Epoch {epoch}/{args.epochs}",
+        )
+        
+        for batch_idx, batch in enumerate(progress_bar):
+            # Unpack batch
+            phone, phone_lengths, pitch, pitchf, spec, spec_lengths, wave, wave_lengths, sid = batch
+            
+            # Forward generator
+            with accelerator.autocast():
+                y_hat, ids_slice, x_mask, z_mask, (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(
+                    phone, phone_lengths, pitch, pitchf, spec, spec_lengths, sid
+                )
+                
+                # Compute mel
+                mel = spec_to_mel_torch(
+                    spec,
+                    default_config["data"]["filter_length"],
+                    default_config["data"]["n_mel_channels"],
+                    default_config["data"]["sampling_rate"],
+                    default_config["data"]["mel_fmin"],
+                    default_config["data"]["mel_fmax"],
+                )
+                
+                y_mel = slice_segments(
+                    mel, ids_slice, default_config["train"]["segment_size"] // args.hop_length
+                )
+                
+                y_hat_mel = mel_spectrogram_torch(
+                    y_hat.float().squeeze(1),
+                    default_config["data"]["filter_length"],
+                    default_config["data"]["n_mel_channels"],
+                    default_config["data"]["sampling_rate"],
+                    args.hop_length,
+                    args.win_length,
+                    default_config["data"]["mel_fmin"],
+                    default_config["data"]["mel_fmax"],
+                )
+                
+                if default_config["train"]["fp16_run"]:
+                    y_hat_mel = y_hat_mel.half()
+                
+                wave = slice_segments(
+                    wave, ids_slice * args.hop_length, default_config["train"]["segment_size"]
+                )
+                
+                # Train Discriminator
+                y_d_hat_r, y_d_hat_g, _, _ = net_d(wave, y_hat.detach())
+                loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
+                    y_d_hat_r, y_d_hat_g
+                )
