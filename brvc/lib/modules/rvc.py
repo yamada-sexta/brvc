@@ -10,6 +10,8 @@ from lib.modules.residual_coupling_block import ResidualCouplingBlock
 from lib.modules.text_encoder import TextEncoder
 import logging
 
+from lib.utils.slice import rand_slice_segments, slice_segments2
+
 sr2sr: Dict[str, int] = {
     "32k": 32000,
     "40k": 40000,
@@ -37,6 +39,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         spk_embed_dim: int,
         gin_channels: int,
         sr: Union[str, int],
+        is_half: bool = False,
         **kwargs: Any,
     ) -> None:
         super(SynthesizerTrnMs256NSFsid, self).__init__()
@@ -82,7 +85,7 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
             upsample_kernel_sizes,
             gin_channels=gin_channels,
             sr=sr,
-            is_half=kwargs["is_half"],
+            is_half=is_half,
         )
         self.enc_q = PosteriorEncoder(
             spec_channels,
@@ -164,11 +167,11 @@ class SynthesizerTrnMs256NSFsid(nn.Module):
         m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
         z_p = self.flow(z, y_mask, g=g)
-        z_slice, ids_slice = commons.rand_slice_segments(
+        z_slice, ids_slice = rand_slice_segments(
             z, y_lengths, self.segment_size
         )
         # print(-1,pitchf.shape,ids_slice,self.segment_size,self.hop_length,self.segment_size//self.hop_length)
-        pitchf = commons.slice_segments2(pitchf, ids_slice, self.segment_size)
+        pitchf = slice_segments2(pitchf, ids_slice, self.segment_size)
         # print(-2,pitchf.shape,z_slice.shape)
         o = self.dec(z_slice, pitchf, g=g)
         return o, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
