@@ -4,8 +4,9 @@ import torch.nn as nn
 from lib.models.sine_gen import SineGen
 
 
-class SourceModuleHnNSF(torch.nn.Module):
-    """SourceModule for hn-nsf
+class SourceModuleHnNSF(nn.Module):
+    """
+    SourceModule for hn-nsf
     SourceModule(sampling_rate, harmonic_num=0, sine_amp=0.1,
                  add_noise_std=0.003, voiced_threshod=0)
     sampling_rate: sampling_rate in Hz
@@ -53,7 +54,7 @@ class SourceModuleHnNSF(torch.nn.Module):
         self.l_tanh = torch.nn.Tanh()
         # self.ddtype:int = -1
 
-    def forward(self, x: torch.Tensor, upp: int = 1):
+    def forward(self, x: torch.Tensor, upp: int = 1) -> tuple[torch.Tensor, None, None]:
         # if self.ddtype ==-1:
         #     self.ddtype = self.l_linear.weight.dtype
         sine_wavs, uv, _ = self.l_sin_gen(x, upp)
