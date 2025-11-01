@@ -2,11 +2,7 @@ import logging
 import traceback
 from pathlib import Path
 from typing import List, Tuple
-
 import numpy as np
-import torch
-import soundfile as sf
-from tap import Tap
 from tqdm import tqdm
 from lib.features.pitch.crepe import CRePE
 from lib.features.pitch.pitch_predictor import PitchPredictor
@@ -74,13 +70,7 @@ def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path, Path]]:
         if inp.suffix.lower() in {".wav", ".flac", ".mp3"} and "spec" not in inp.name
     ]
 
-
-# ---------------------------------------------------------------------
-# Main functional runner
-# ---------------------------------------------------------------------
-def run_f0_extraction(
-    n_part: int,
-    i_part: int,
+def extract_f0(
     exp_dir: Path,
     sampling_rate: int = 44100,
 ) -> None:
@@ -96,7 +86,7 @@ def run_f0_extraction(
 
 def main() -> None:
     from tap import tapify
-    tapify(run_f0_extraction)
+    tapify(extract_f0)
 
 
 if __name__ == "__main__":

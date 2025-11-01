@@ -32,9 +32,9 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
-def load_model(model_path: str, accelerator: Accelerator, version: str) -> tuple[torch.nn.Module, DictConfig]:
+def load_model(model_path: Path, accelerator: Accelerator, version: str) -> tuple[torch.nn.Module, DictConfig]:
     """Load and prepare the HuBERT model."""
-    if not os.path.exists(model_path):
+    if not model_path.exists():
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
 
         # Download hubert_base.pt from the VoiceConversionWebUI repo
@@ -55,7 +55,7 @@ def load_model(model_path: str, accelerator: Accelerator, version: str) -> tuple
 
     with safe_globals([Dictionary]):
         models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
-            [model_path]
+            [str(model_path)]
         )
         if saved_cfg is None:
             raise ValueError("Could not find model configuration.")
@@ -76,7 +76,7 @@ def extract_feature(
     file: Path,
     out_file: Path,
     model,
-    saved_cfg,
+    saved_cfg: DictConfig,
     accelerator: Accelerator,
     version: str,
 ):
@@ -101,19 +101,19 @@ def extract_feature(
         logger.warning(f"{file.name} contains NaNs, skipped.")
 
 def extract_features(
-    input_dir: str,
-    output_dir: str,
+    exp_dir: Path,
+    output_dir: Path,
     version: Literal["v1", "v2"] = "v2",
     is_half: bool = False,
-    model_path: str = "assets/hubert/hubert_base.pt",
+    model_path: Path = Path("assets/hubert/hubert_base.pt"),
 ):
     """
     Extract features from audio files using a pre-trained HuBERT model.
     Parameters
     ----------
-    input_dir : str
-        Path to the input data directory containing wav files.
-    output_dir : str
+    exp_dir : Path
+        Path to the experiment directory containing wav files.
+    output_dir : Path
         Path to save the extracted features.
     version : Literal["v1", "v2"], optional
         Version of HuBERT model to use ('v1' or 'v2'), by default "v2".
@@ -128,7 +128,7 @@ def extract_features(
 
     model, saved_cfg = load_model(model_path, accelerator, version)
 
-    wav_dir = Path(input_dir)
+    wav_dir = Path(exp_dir / "1_16k_wavs")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
