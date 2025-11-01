@@ -15,8 +15,12 @@ import numpy as np
 import soundfile as sf
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from huggingface_hub import hf_hub_download
-from fairseq.models.hubert.hubert import HubertModel
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from fairseq.models.hubert.hubert import HubertModel
+
+
 logger = get_logger(__name__)
 
 
@@ -33,9 +37,12 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
+
 def load_hubert_model(
     model_path: Path, accelerator: Accelerator
-) -> tuple[HubertModel, DictConfig]:
+) -> tuple["HubertModel", DictConfig]:
+    from huggingface_hub import hf_hub_download
+    from fairseq.models.hubert.hubert import HubertModel
     """Load and prepare the HuBERT model."""
     if not model_path.exists():
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
@@ -56,6 +63,7 @@ def load_hubert_model(
     from fairseq import checkpoint_utils
     from torch.serialization import safe_globals
 
+    models: list[HubertModel] = []
     with safe_globals([Dictionary]):
         models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
             [str(model_path)]

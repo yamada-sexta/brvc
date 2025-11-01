@@ -187,12 +187,12 @@ def train_model(
 
     train_loader = DataLoader(
         train_dataset,
-        num_workers=4,
+        # num_workers=4,
         shuffle=False,
-        pin_memory=True,
+        # pin_memory=True,
         collate_fn=collate_fn,
-        persistent_workers=True,
-        prefetch_factor=8,
+        # persistent_workers=True,
+        # prefetch_factor=8,
     )
 
     # Models
@@ -260,11 +260,14 @@ def train_model(
     for epoch in range(1, epochs + 1):
         net_g.train()
         net_d.train()
+        
+        loss_g = torch.tensor(0.0)
+        loss_d = torch.tensor(0.0)
 
         progress_bar = tqdm(
             train_loader,
             disable=not accelerator.is_main_process,
-            desc=f"Epoch {epoch}/{epochs}",
+            desc=f"Epoch {epoch}/{epochs} loss_g: {loss_g:.4f} loss_d: {loss_d:.4f}",
         )
 
         for batch_idx, batch in enumerate(progress_bar):
@@ -346,9 +349,13 @@ def train_model(
 
             optim_g.zero_grad()
             accelerator.backward(loss_gen_all)
+            
             grad_norm_g = clip_grad_value_(net_g.parameters(), None)
             optim_g.step()
             global_step += 1
+            
+            # loss_g = loss_gen_all.detach().cpu()
+            # loss_d = loss_disc.detach().cpu()
 
             # Logging
             if global_step % log_interval == 0 and accelerator.is_main_process:
