@@ -64,10 +64,11 @@ def load_model(model_path: str, accelerator: Accelerator, version: str):
         shutil.copy(downloaded_model_path, model_path)
     import fairseq
     from fairseq.data.dictionary import Dictionary
+    from fairseq import checkpoint_utils
     from torch.serialization import safe_globals
 
     with safe_globals([Dictionary]):
-        models, saved_cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task(
+        models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
             [model_path]
         )
 
