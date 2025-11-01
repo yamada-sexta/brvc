@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from typing import Optional
 from accelerate.utils import set_seed
 from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
@@ -73,6 +74,7 @@ from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
 
+
 def save_checkpoint(
     accelerator: Accelerator,
     net_g: torch.nn.Module,
@@ -81,11 +83,11 @@ def save_checkpoint(
     optim_d: torch.optim.Optimizer,
     epoch: int,
     global_step: int,
-    model_dir: str,
+    model_dir: Path,
 ):
     """Save checkpoint."""
     if accelerator.is_main_process:
-        save_dir = Path(model_dir)
+        save_dir = model_dir
         save_dir.mkdir(parents=True, exist_ok=True)
 
         unwrapped_g = accelerator.unwrap_model(net_g)
@@ -111,7 +113,7 @@ def save_checkpoint(
             save_dir / f"D_{global_step}.pth",
         )
 
-        logger.info(f"✓ Saved checkpoint at step {global_step}")
+        logger.info(f"[success] Saved checkpoint at step {global_step}")
 
 
 def load_pretrained(
@@ -132,9 +134,8 @@ def load_pretrained(
 
 
 def run_train(
-    # args: TrainArgs,
-    train_filelist: str = "filelists/train.txt",
-    model_dir: str = "logs/model",
+    train_filelist: Path = Path("filelists/train.txt"),
+    exp_dir: Path = Path("logs/model"),
     epochs: int = 20000,
     batch_size: int = 4,
     learning_rate: float = 1e-4,
@@ -151,8 +152,8 @@ def run_train(
     betas: tuple = (0.8, 0.99),
     save_every_epoch: int = 10,
     log_interval: int = 200,
-    pretrain_g: str = "",
-    pretrain_d: str = "",
+    pretrain_g: Optional[Path] = None,
+    pretrain_d: Optional[Path] = None,
 ):
     """Main training function."""
 
@@ -166,11 +167,11 @@ def run_train(
 
     # Create model directory
     if accelerator.is_main_process:
-        os.makedirs(model_dir, exist_ok=True)
+        os.makedirs(exp_dir, exist_ok=True)
 
     # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
-        audiopaths_and_text=train_filelist,
+        audiopaths_and_text=str(train_filelist),
         max_wav_value=max_wav_value,
         sampling_rate=sample_rate,
         filter_length=filter_length,
@@ -249,9 +250,9 @@ def run_train(
 
     # Load pretrained
     if pretrain_g:
-        load_pretrained(net_g, pretrain_g, accelerator)
+        load_pretrained(net_g, str(pretrain_g), accelerator)
     if pretrain_d:
-        load_pretrained(net_d, pretrain_d, accelerator)
+        load_pretrained(net_d, str(pretrain_d), accelerator)
     # Training loop
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
@@ -399,6 +400,7 @@ def run_train(
 
         # Save checkpoint
         if epoch % save_every_epoch == 0:
+            logger.info(f"Saving checkpoint for epoch {epoch}")
             save_checkpoint(
                 accelerator,
                 net_g,
@@ -407,14 +409,14 @@ def run_train(
                 optim_d,
                 epoch,
                 global_step,
-                model_dir,
+                exp_dir,
             )
 
         accelerator.wait_for_everyone()
 
         # Final save
     if accelerator.is_main_process:
-        accelerator.print("Training completed!")
+        logger.info("Training completed!")
         save_checkpoint(
             accelerator,
             net_g,
@@ -423,7 +425,7 @@ def run_train(
             optim_d,
             epochs,
             global_step,
-            model_dir,
+            exp_dir,
         )
 
 

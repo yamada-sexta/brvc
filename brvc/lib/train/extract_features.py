@@ -32,7 +32,7 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
-def load_model(model_path: Path, accelerator: Accelerator, version: str) -> tuple[torch.nn.Module, DictConfig]:
+def load_model(model_path: Path, accelerator: Accelerator) -> tuple[torch.nn.Module, DictConfig]:
     """Load and prepare the HuBERT model."""
     if not model_path.exists():
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
@@ -126,7 +126,7 @@ def extract_features(
     accelerator = Accelerator(mixed_precision="fp16" if is_half else "no")
     logger.info(f"Using device: {accelerator.device}")
 
-    model, saved_cfg = load_model(model_path, accelerator, version)
+    model, saved_cfg = load_model(model_path, accelerator)
 
     wav_dir = Path(exp_dir / "1_16k_wavs")
     out_dir = Path(output_dir)
