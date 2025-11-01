@@ -54,6 +54,7 @@ def run_training(
     train_model(
         train_files=train_files,
         exp_dir=exp_dir,
+        epochs=200
     )
 
     pass
