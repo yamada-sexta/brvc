@@ -18,7 +18,7 @@ from lib.utils.slicer import Slicer
 logger = logging.getLogger(__name__)
 
 
-class Args(Tap):
+class PreprocessArgs(Tap):
     """
     Preprocessing arguments
     """
@@ -123,7 +123,7 @@ def process_file(
         logging.error(f"Failed to process {path}\n{traceback.format_exc()}")
 
 
-def preprocess_dataset(args: Args) -> None:
+def preprocess_dataset(args: PreprocessArgs) -> None:
     """Main preprocessing pipeline."""
     logging.info("Starting preprocessing...")
 
@@ -164,5 +164,5 @@ def preprocess_dataset(args: Args) -> None:
 
 
 if __name__ == "__main__":
-    args = Args().parse_args()
+    args = PreprocessArgs().parse_args()
     preprocess_dataset(args)

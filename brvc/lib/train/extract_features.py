@@ -5,6 +5,7 @@ import logging
 import traceback
 from pathlib import Path
 from typing import Literal
+from omegaconf import DictConfig
 from tqdm import tqdm
 from tap import Tap
 
@@ -16,7 +17,7 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from huggingface_hub import hf_hub_download
 
-class Args(Tap):
+class FeatureExtractArgs(Tap):
     """
     Feature extraction arguments
     """
@@ -43,7 +44,7 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
-def load_model(model_path: str, accelerator: Accelerator, version: str):
+def load_model(model_path: str, accelerator: Accelerator, version: str) -> tuple[torch.nn.Module, DictConfig]:
     """Load and prepare the HuBERT model."""
     if not os.path.exists(model_path):
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
@@ -68,6 +69,8 @@ def load_model(model_path: str, accelerator: Accelerator, version: str):
         models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
             [model_path]
         )
+        if saved_cfg is None:
+            raise ValueError("Could not find model configuration.")
 
     model = models[0]
     model.eval()
@@ -77,7 +80,7 @@ def load_model(model_path: str, accelerator: Accelerator, version: str):
     if accelerator.mixed_precision == "fp16":
         model = model.half()
 
-    logging.info(f"Model loaded and prepared on device(s): {accelerator.device}")
+    logger.info(f"Model loaded and prepared on device(s): {accelerator.device}")
     return model, saved_cfg
 
 
@@ -90,26 +93,26 @@ def extract_feature(
     version: str,
 ):
     """Extract HuBERT features for a single file."""
-    feats = read_wave(file, normalize=saved_cfg.task.normalize)
-    padding_mask = torch.BoolTensor(feats.shape).fill_(False)
+    wav: torch.Tensor = read_wave(file, normalize=saved_cfg.task.normalize)
+    padding_mask = torch.BoolTensor(wav.shape).fill_(False)
 
     inputs = {
-        "source": feats.to(accelerator.device),
+        "source": wav.to(accelerator.device),
         "padding_mask": padding_mask.to(accelerator.device),
         "output_layer": 9 if version == "v1" else 12,
     }
 
     with torch.no_grad():
         logits = model.extract_features(**inputs)
-        feats = model.final_proj(logits[0]) if version == "v1" else logits[0]
+        feats_tensor: torch.Tensor = model.final_proj(logits[0]) if version == "v1" else logits[0]
 
-    feats = feats.squeeze(0).float().cpu().numpy()
+    feats = feats_tensor.squeeze(0).float().cpu().numpy()
     if not np.isnan(feats).any():
         np.save(out_file, feats, allow_pickle=False)
     else:
-        logging.warning(f"{file.name} contains NaNs, skipped.")
+        logger.warning(f"{file.name} contains NaNs, skipped.")
 
-def main(args: Args):
+def main(args: FeatureExtractArgs):
     # Initialize accelerator for multi-GPU, mixed precision, etc.
     accelerator = Accelerator(mixed_precision="fp16" if args.is_half else "no")
     logger.info(f"Using device: {accelerator.device}")
@@ -138,9 +141,9 @@ def main(args: Args):
         except Exception:
             logger.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
 
-    logger.info("✅ Feature extraction completed successfully.")
+    logger.info("[DONE] Feature extraction completed successfully.")
 
 
 if __name__ == "__main__":
-    args = Args().parse_args()
+    args = FeatureExtractArgs().parse_args()
     main(args)
