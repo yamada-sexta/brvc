@@ -14,6 +14,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[NDArray]:
     """Normalize audio amplitude."""
     tmp_max = np.abs(audio).max()
@@ -73,20 +74,16 @@ def process_file(
                     norm_audio = normalize_audio(tmp_audio, max_amp, alpha)
                     if norm_audio is not None:
                         basename = f"{idx}_{idx1}.wav"
-                        save_audio(norm_audio, sr, os.path.join(gt_wavs_dir, basename))
-                        save_audio(
-                            norm_audio, sr, os.path.join(wavs16k_dir, basename), 16000
-                        )
+                        save_audio(norm_audio, sr, gt_wavs_dir / basename)
+                        save_audio(norm_audio, sr, wavs16k_dir / basename, 16000)
                     idx1 += 1
                 else:
                     tmp_audio = sliced_audio[start:]
                     norm_audio = normalize_audio(tmp_audio, max_amp, alpha)
                     if norm_audio is not None:
                         basename = f"{idx}_{idx1}.wav"
-                        save_audio(norm_audio, sr, os.path.join(gt_wavs_dir, basename))
-                        save_audio(
-                            norm_audio, sr, os.path.join(wavs16k_dir, basename), 16000
-                        )
+                        save_audio(norm_audio, sr, gt_wavs_dir / basename)
+                        save_audio(norm_audio, sr, wavs16k_dir / basename, 16000)
                     break
 
         logging.info(f"Processed: {path}")
@@ -146,7 +143,9 @@ def preprocess_dataset(
     # gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
     # files = sorted(os.listdir(audio_dir))
     files = audio_dir.glob("*.wav")
-    for idx, file in enumerate(tqdm(files, desc="Processing audio files")):
+    for idx, file in enumerate(
+        tqdm(files, dynamic_ncols=True, desc="Processing audio files")
+    ):
         # path = audio_dir / fname
 
         process_file(

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 import numpy as np
 from numpy.typing import NDArray
 import torch
@@ -9,11 +9,11 @@ from brvc.lib.features.pitch import pitch_predictor
 class CRePE(pitch_predictor.PitchPredictor):
     def __init__(
         self,
-        hop_length=512,
-        f0_min=50,
-        f0_max=1100,
-        sample_rate=44100,
-        device="cpu",
+        hop_length: int = 512,
+        f0_min: int = 50,
+        f0_max: int = 1100,
+        sample_rate: int = 44100,
+        device: Union[str, torch.device] = "cpu",
     ):
         if "privateuseone" in str(device):
             device = "cpu"

@@ -7,8 +7,11 @@ from tqdm import tqdm
 from lib.features.pitch.crepe import CRePE
 from lib.features.pitch.pitch_predictor import PitchPredictor
 from lib.utils.audio import load_audio
+from accelerate import Accelerator
+from accelerate.logging import get_logger
+from torch.utils.data import DataLoader, Dataset
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def mel_scale(f0: np.ndarray) -> np.ndarray:
@@ -70,22 +73,80 @@ def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path, Path]]:
         if inp.suffix.lower() in {".wav", ".flac", ".mp3"} and "spec" not in inp.name
     ]
 
-def extract_f0(
-    exp_dir: Path,
-    sample_rate: int = 44100,
-) -> None:
-    """Main F0 extraction logic using CRePE."""
+
+class AudioDataset(Dataset):
+    def __init__(self, paths):
+        self.paths = paths
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, idx):
+        return self.paths[idx]
+
+
+# def extract_f0(
+#     exp_dir: Path,
+#     sample_rate: int = 44100,
+# ) -> None:
+#     """Main F0 extraction logic using CRePE."""
+#     accelerator = Accelerator()
+#     device = accelerator.device
+
+#     logger.info(f"Using device: {device}", main_process_only=True)
+
+#     paths = collect_audio_paths(exp_dir)
+#     pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
+
+#     logger.info(
+#         f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
+#     )
+
+#     for inp, opt1, opt2 in tqdm(
+#         paths,
+#         desc="Extracting F0",
+#         unit="file",
+#         disable=not accelerator.is_main_process,
+#     ):
+#         extract_f0_pair(inp, opt1, opt2, pitch_extractor)
+
+#     accelerator.wait_for_everyone()
+
+#     logger.info("All F0 features extracted successfully.")
+
+
+def extract_f0(exp_dir: Path, sample_rate: int = 44100):
+    accelerator = Accelerator()
+    device = accelerator.device
+    logger.info(f"Using device: {device}", main_process_only=True)
+
     paths = collect_audio_paths(exp_dir)
-    logger.info(f"Processing {len(paths)} files using CRePE (CPU)")
-    pitch_extractor = CRePE(device="cpu", sample_rate=sample_rate)
-    for inp, opt1, opt2 in tqdm(paths, desc="Extracting F0", unit="file"):
+    dataset = AudioDataset(paths)
+    dataloader = DataLoader(dataset, batch_size=None)
+    dataloader = accelerator.prepare(dataloader)
+
+    pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
+
+    logger.info(
+        f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
+    )
+
+    for inp, opt1, opt2 in tqdm(
+        dataloader,
+        disable=not accelerator.is_main_process,
+        desc="Extracting F0",
+        unit="file",
+        dynamic_ncols=True,
+    ):
         extract_f0_pair(inp, opt1, opt2, pitch_extractor)
 
-    logger.info("All F0 features extracted successfully.")
+    accelerator.wait_for_everyone()
+    logger.info("All F0 features extracted successfully.", main_process_only=True)
 
 
 def main() -> None:
     from tap import tapify
+
     tapify(extract_f0)
 
 

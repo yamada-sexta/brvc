@@ -69,7 +69,7 @@ RES_BLOCK_VERSION = Literal["1", "2"]
 #         for l in self.convs:
 #             for hook in l._forward_pre_hooks.values():
 #                 if (
-#                     hook.__module__ == "torch.nn.utils.weight_norm"
+#                     hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
 #                     and hook.__class__.__name__ == "WeightNorm"
 #                 ):
 #                     torch.nn.utils.remove_weight_norm(l)
@@ -185,14 +185,14 @@ class ResBlock1(torch.nn.Module):
         for l in self.convs1:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
+                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)
         for l in self.convs2:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
+                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)

@@ -29,6 +29,12 @@ def run_training(
         sample_rate=44100,
     )
     
+    extract_features(
+        exp_dir=exp_dir,
+    )
+    
+    
+    
     pass
 
 

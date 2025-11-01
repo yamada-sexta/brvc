@@ -19,6 +19,7 @@ from huggingface_hub import hf_hub_download
 
 logger = get_logger(__name__)
 
+
 def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     """Load a mono 16kHz waveform and optionally normalize."""
     wav, sr = sf.read(path)
@@ -32,7 +33,9 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
-def load_model(model_path: Path, accelerator: Accelerator) -> tuple[torch.nn.Module, DictConfig]:
+def load_model(
+    model_path: Path, accelerator: Accelerator
+) -> tuple[torch.nn.Module, DictConfig]:
     """Load and prepare the HuBERT model."""
     if not model_path.exists():
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
@@ -62,7 +65,7 @@ def load_model(model_path: Path, accelerator: Accelerator) -> tuple[torch.nn.Mod
 
     model = models[0]
     model.eval()
-    
+
     # Move to accelerator device, handle fp16 automatically
     model = accelerator.prepare(model)
     if accelerator.mixed_precision == "fp16":
@@ -92,7 +95,9 @@ def extract_feature(
 
     with torch.no_grad():
         logits = model.extract_features(**inputs)
-        feats_tensor: torch.Tensor = model.final_proj(logits[0]) if version == "v1" else logits[0]
+        feats_tensor: torch.Tensor = (
+            model.final_proj(logits[0]) if version == "v1" else logits[0]
+        )
 
     feats = feats_tensor.squeeze(0).float().cpu().numpy()
     if not np.isnan(feats).any():
@@ -100,9 +105,10 @@ def extract_feature(
     else:
         logger.warning(f"{file.name} contains NaNs, skipped.")
 
+
 def extract_features(
     exp_dir: Path,
-    output_dir: Path,
+    # output_dir: Path,
     version: Literal["v1", "v2"] = "v2",
     is_half: bool = False,
     model_path: Path = Path("assets/hubert/hubert_base.pt"),
@@ -128,8 +134,9 @@ def extract_features(
 
     model, saved_cfg = load_model(model_path, accelerator)
 
-    wav_dir = Path(exp_dir / "1_16k_wavs")
-    out_dir = Path(output_dir)
+    wav_dir = exp_dir / "1_16k_wavs"
+    # out_dir = Path(output_dir)
+    out_dir = exp_dir / f"3_feature768"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     wav_files = sorted(wav_dir.glob("*.wav"))
@@ -141,7 +148,12 @@ def extract_features(
 
     logger.info(f"Processing {len(wav_files)} files...")
 
-    for file in tqdm(wav_files, desc="Extracting features", ncols=80, disable=not accelerator.is_local_main_process):
+    for file in tqdm(
+        wav_files,
+        desc="Extracting features",
+        dynamic_ncols=True,
+        disable=not accelerator.is_local_main_process,
+    ):
         try:
             out_file = out_dir / file.with_suffix(".npy").name
             if out_file.exists():
@@ -157,4 +169,5 @@ if __name__ == "__main__":
     # args = FeatureExtractArgs().parse_args()
     # main(args)
     from tap import tapify
+
     tapify(extract_features)
