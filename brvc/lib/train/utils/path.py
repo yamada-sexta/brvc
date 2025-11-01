@@ -1,10 +1,12 @@
+from pathlib import Path
+from typing import Union
 from scipy.io.wavfile import read
 import torch
 import numpy as np
 
 
 def load_filepaths_and_text(
-    filename: str, split="|"
+    filename: Union[str, Path], split="|"
 ) -> list[tuple[str, str, str, str, str]]:
     with open(filename, encoding="utf-8") as f:
         filepaths_and_text = [line_to_tuple(line, split) for line in f]

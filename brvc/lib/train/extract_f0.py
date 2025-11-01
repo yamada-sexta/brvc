@@ -72,12 +72,12 @@ def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path, Path]]:
 
 def extract_f0(
     exp_dir: Path,
-    sampling_rate: int = 44100,
+    sample_rate: int = 44100,
 ) -> None:
     """Main F0 extraction logic using CRePE."""
     paths = collect_audio_paths(exp_dir)
     logger.info(f"Processing {len(paths)} files using CRePE (CPU)")
-    pitch_extractor = CRePE(device="cpu", sampling_rate=sampling_rate)
+    pitch_extractor = CRePE(device="cpu", sample_rate=sample_rate)
     for inp, opt1, opt2 in tqdm(paths, desc="Extracting F0", unit="file"):
         extract_f0_pair(inp, opt1, opt2, pitch_extractor)
 

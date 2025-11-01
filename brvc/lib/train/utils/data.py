@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import traceback
 from typing import Union
 import torch
@@ -22,7 +23,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        audiopaths_and_text: str,
+        audiopaths_and_text: Union[str, Path, list[tuple[str, str, str, str, str]]],
         max_wav_value: float,  # e.g. 32768.0
         sampling_rate: int,  # e.g. 48000
         filter_length: int,  # e.g. 2048
@@ -31,7 +32,15 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         max_text_len: int,  # e.g. 5000
         min_text_len: int,  # e.g. 1
     ):
-        self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
+        if isinstance(audiopaths_and_text, (str, Path)):
+            self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
+        elif isinstance(audiopaths_and_text, list) and all(
+            isinstance(t, tuple) and len(t) == 5 for t in audiopaths_and_text
+        ):
+            self.audiopaths_and_text = audiopaths_and_text
+        else:
+            raise ValueError("Invalid type for audiopaths_and_text")
+
         self.max_wav_value = max_wav_value
         self.sampling_rate = sampling_rate
         self.filter_length = filter_length

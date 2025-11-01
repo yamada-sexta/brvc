@@ -12,7 +12,7 @@ class CRePE(pitch_predictor.PitchPredictor):
         hop_length=512,
         f0_min=50,
         f0_max=1100,
-        sampling_rate=44100,
+        sample_rate=44100,
         device="cpu",
     ):
         if "privateuseone" in str(device):
@@ -21,7 +21,7 @@ class CRePE(pitch_predictor.PitchPredictor):
             hop_length,
             f0_min,
             f0_max,
-            sampling_rate,
+            sample_rate,
             device,
         )
 

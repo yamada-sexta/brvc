@@ -10,17 +10,9 @@ from scipy.io import wavfile
 from numpy.typing import NDArray
 from lib.utils.audio import load_audio
 from lib.utils.slicer import Slicer
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
-def init_dirs(output_root: str) -> tuple[str, str]:
-    """Create required output directories."""
-    gt_wavs_dir = os.path.join(output_root, "0_gt_wavs")
-    wavs16k_dir = os.path.join(output_root, "1_16k_wavs")
-    os.makedirs(gt_wavs_dir, exist_ok=True)
-    os.makedirs(wavs16k_dir, exist_ok=True)
-    return gt_wavs_dir, wavs16k_dir
-
 
 def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[NDArray]:
     """Normalize audio amplitude."""
@@ -32,7 +24,7 @@ def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[ND
 
 
 def save_audio(
-    audio: Optional[NDArray], sr: int, path: str, resample_sr: Optional[int] = None
+    audio: Optional[NDArray], sr: int, path: Path, resample_sr: Optional[int] = None
 ) -> None:
     """Save audio at original or resampled rate."""
     if audio is None:
@@ -42,18 +34,18 @@ def save_audio(
     if resample_sr:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=resample_sr)
         sr = resample_sr
-        
-    wavfile.write(path, sr, audio.astype(np.float32))
+
+    wavfile.write(str(path), sr, audio.astype(np.float32))
 
 
 def process_file(
-    path: str,
+    path: Path,
     idx: int,
     sr: int,
     slicer: Slicer,
     filter_coeffs: tuple[NDArray, NDArray],
-    gt_wavs_dir: str,
-    wavs16k_dir: str,
+    gt_wavs_dir: Path,
+    wavs16k_dir: Path,
     per: float,
     overlap: float,
     max_amp: float,
@@ -104,8 +96,8 @@ def process_file(
 
 
 def preprocess_dataset(
-    input_root: str,
-    output_root: str,
+    audio_dir: Path,
+    exp_dir: Path,
     sample_rate: int = 48000,
     per: float = 3.7,
     overlap: float = 0.3,
@@ -147,13 +139,18 @@ def preprocess_dataset(
     else:
         raise ValueError("Unexpected result from signal.butter")
 
-    gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
-    files = sorted(os.listdir(input_root))
+    gt_wavs_dir = exp_dir / "0_gt_wavs"
+    wavs16k_dir = exp_dir / "1_16k_wavs"
+    gt_wavs_dir.mkdir(parents=True, exist_ok=True)
+    wavs16k_dir.mkdir(parents=True, exist_ok=True)
+    # gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
+    # files = sorted(os.listdir(audio_dir))
+    files = audio_dir.glob("*.wav")
+    for idx, file in enumerate(tqdm(files, desc="Processing audio files")):
+        # path = audio_dir / fname
 
-    for idx, fname in enumerate(tqdm(files, desc="Processing audio files")):
-        path = os.path.join(input_root, fname)
         process_file(
-            path=path,
+            path=file,
             idx=idx,
             sr=sample_rate,
             slicer=slicer,
@@ -171,4 +168,5 @@ def preprocess_dataset(
 
 if __name__ == "__main__":
     from tap import tapify
+
     tapify(preprocess_dataset)
