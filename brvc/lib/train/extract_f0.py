@@ -1,14 +1,3 @@
-#!/usr/bin/env python3
-"""
-Functional F0 extraction pipeline using CRePE (torchcrepe).
-- CPU-only
-- No CUDA, no half-precision
-- Fully functional design
-- Uses TAP for CLI, tqdm for progress, pathlib for paths
-"""
-
-from __future__ import annotations
-
 import logging
 import traceback
 from pathlib import Path
@@ -25,9 +14,11 @@ from lib.utils.audio import load_audio
 
 logger = logging.getLogger(__name__)
 
+
 def mel_scale(f0: np.ndarray) -> np.ndarray:
     """Convert linear frequency (Hz) to Mel scale."""
     return 1127 * np.log1p(f0 / 700)
+
 
 def coarse_f0(
     f0: np.ndarray,
@@ -83,35 +74,27 @@ def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path, Path]]:
         if inp.suffix.lower() in {".wav", ".flac", ".mp3"} and "spec" not in inp.name
     ]
 
-def partition_paths(paths: List, n_part: int, i_part: int) -> List:
-    """Split list of paths into `n_part` partitions."""
-    return paths[i_part::n_part]
 
 # ---------------------------------------------------------------------
 # Main functional runner
 # ---------------------------------------------------------------------
 def run_f0_extraction(
-                      n_part: int,
-                      i_part: int,
-                      exp_dir: Path
-                      ) -> None:
+    n_part: int,
+    i_part: int,
+    exp_dir: Path,
+    sampling_rate: int = 44100,
+) -> None:
     """Main F0 extraction logic using CRePE."""
     paths = collect_audio_paths(exp_dir)
-    subset = partition_paths(paths, n_part, i_part)
-
-    logger.info(f"Processing {len(subset)} of {len(paths)} files using CRePE (CPU)")
-
-    pitch_extractor = CRePE(device="cpu", sampling_rate=44100)
-
-    for inp, opt1, opt2 in tqdm(subset, desc="Extracting F0", unit="file"):
+    logger.info(f"Processing {len(paths)} files using CRePE (CPU)")
+    pitch_extractor = CRePE(device="cpu", sampling_rate=sampling_rate)
+    for inp, opt1, opt2 in tqdm(paths, desc="Extracting F0", unit="file"):
         extract_f0_pair(inp, opt1, opt2, pitch_extractor)
 
-    logger.info("✅ All F0 features extracted successfully.")
+    logger.info("All F0 features extracted successfully.")
 
 
 def main() -> None:
-    # args = Args().parse_args()
-    # run_f0_extraction(args)
     from tap import tapify
     tapify(run_f0_extraction)
 
