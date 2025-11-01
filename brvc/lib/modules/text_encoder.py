@@ -19,6 +19,7 @@ class TextEncoder(nn.Module):
         kernel_size: int,
         p_dropout: float,
         f0: bool = True,
+        lrelu_slope: float = 0.1,
     ):
         super(TextEncoder, self).__init__()
         self.out_channels = out_channels
@@ -29,7 +30,7 @@ class TextEncoder(nn.Module):
         self.kernel_size = kernel_size
         self.p_dropout = float(p_dropout)
         self.emb_phone = nn.Linear(in_channels, hidden_channels)
-        self.lrelu = nn.LeakyReLU(0.1, inplace=True)
+        self.lrelu = nn.LeakyReLU(lrelu_slope, inplace=True)
         if f0 == True:
             self.emb_pitch = nn.Embedding(256, hidden_channels)  # pitch 256
         self.encoder = Encoder(

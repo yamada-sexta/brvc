@@ -42,6 +42,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
         sr: Union[str, int],
         is_half: bool,
         txt_channels: int = 768,
+        lrelu_slope: float = 0.1,
         **kwargs: Any,
     ) -> None:
         super(SynthesizerTrnMsNSFsid, self).__init__()
@@ -78,6 +79,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
             n_layers,
             kernel_size,
             float(p_dropout),
+            lrelu_slope=lrelu_slope,
         )
         self.dec = GeneratorNSF(
             inter_channels,
@@ -90,7 +92,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
             gin_channels=gin_channels,
             sr=sr,
             is_half=is_half,
-            lrelu_slope=0.1,
+            lrelu_slope=lrelu_slope,
         )
         self.enc_q = PosteriorEncoder(
             spec_channels,
@@ -102,7 +104,12 @@ class SynthesizerTrnMsNSFsid(nn.Module):
             gin_channels=gin_channels,
         )
         self.flow = ResidualCouplingBlock(
-            inter_channels, hidden_channels, 5, 1, 3, gin_channels=gin_channels
+            channels=inter_channels,
+            hidden_channels=hidden_channels,
+            kernel_size=5,
+            dilation_rate=1,
+            n_layers=3,
+            gin_channels=gin_channels,
         )
         self.emb_g = nn.Embedding(self.spk_embed_dim, gin_channels)
         logging.debug(
