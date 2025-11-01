@@ -4,6 +4,7 @@ import sys
 import logging
 import traceback
 from pathlib import Path
+from typing import Literal
 from tqdm import tqdm
 from tap import Tap
 
@@ -22,8 +23,7 @@ class Args(Tap):
 
     input_dir: str  # Path to input data directory containing wavs
     output_dir: str  # Path to save extracted features
-    version: str = "v1"  # 'v1' or 'v2'
-    device: str = "auto"  # 'cpu', 'cuda', 'mps', 'privateuseone', or 'auto'
+    version: Literal["v1", "v2"] = "v2"  # 'v1' or 'v2'
     n_part: int = 1  # Total parts (for parallel jobs)
     i_part: int = 0  # Current part index
     i_gpu: int = 0  # GPU index if CUDA
