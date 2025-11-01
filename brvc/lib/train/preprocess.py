@@ -2,16 +2,12 @@ import os
 import traceback
 import logging
 from typing import List, Optional
-from tap import Tap
 from tqdm import tqdm
 import numpy as np
 import librosa
 from scipy import signal
 from scipy.io import wavfile
 from numpy.typing import NDArray
-
-from tap import Tap
-
 from lib.utils.audio import load_audio
 from lib.utils.slicer import Slicer
 
@@ -46,9 +42,7 @@ def save_audio(
     if resample_sr:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=resample_sr)
         sr = resample_sr
-        # wavfile.write(path, resample_sr, audio.astype(np.float32))
-    # else:
-    # wavfile.write(path, sr, audio.astype(np.float32))
+        
     wavfile.write(path, sr, audio.astype(np.float32))
 
 
@@ -147,7 +141,7 @@ def preprocess_dataset(
         hop_size=15,
         max_sil_kept=500,
     )
-    res: tuple[NDArray, NDArray] = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)
+    res: tuple[NDArray, NDArray] = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)  # type: ignore
     if isinstance(res, tuple) and len(res) == 2:
         b, a = res
     else:
@@ -176,8 +170,5 @@ def preprocess_dataset(
 
 
 if __name__ == "__main__":
-    # args = PreprocessArgs().parse_args()
-    # preprocess_dataset(
     from tap import tapify
-
     tapify(preprocess_dataset)

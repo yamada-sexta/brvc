@@ -432,11 +432,9 @@ def run_train(
 
 
 def main():
-    # args = TrainArgs().parse_args()
-    # run_train(args)
     from tap import tapify
 
-    tapify(run_train)()
+    tapify(run_train)
 
 
 if __name__ == "__main__":
