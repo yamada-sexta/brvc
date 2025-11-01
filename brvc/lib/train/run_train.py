@@ -1,16 +1,18 @@
 from pathlib import Path
 from typing import Union, Optional
 
-from lib.train.preprocess import preprocess_dataset
-from lib.train.extract_f0 import extract_f0
-from lib.train.extract_features import extract_features
-from lib.train.train_model import train_model
-
-
 def run_training(
     audio_dir: Path,
     exp_dir: Optional[Path] = None,
 ):
+    if not audio_dir.exists():
+        raise FileNotFoundError(f"Audio directory {audio_dir} does not exist.")
+    from lib.train.preprocess import preprocess_dataset
+    from lib.train.extract_f0 import extract_f0
+    from lib.train.extract_features import extract_features
+    from lib.train.train_model import train_model
+
+
     if exp_dir is None:
         exp_dir = Path("experiments") / audio_dir.name
 
