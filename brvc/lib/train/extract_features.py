@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import logging
 import traceback
@@ -11,7 +12,8 @@ import torch.nn.functional as F
 import numpy as np
 import soundfile as sf
 from accelerate import Accelerator
-
+from accelerate.logging import get_logger
+from huggingface_hub import hf_hub_download
 
 class Args(Tap):
     """
@@ -29,7 +31,7 @@ class Args(Tap):
     model_path: str = "assets/hubert/hubert_base.pt"  # HuBERT model path
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     """Load a mono 16kHz waveform and optionally normalize."""
@@ -47,11 +49,20 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
 def load_model(model_path: str, accelerator: Accelerator, version: str):
     """Load and prepare the HuBERT model."""
     if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"{model_path} not found. Download it from: "
-            "https://huggingface.co/lj1995/VoiceConversionWebUI/tree/main"
+        logging.info(f"{model_path} not found. Downloading from Hugging Face...")
+
+        # Download hubert_base.pt from the VoiceConversionWebUI repo
+        downloaded_model_path = hf_hub_download(
+            repo_id="lj1995/VoiceConversionWebUI",
+            filename="hubert_base.pt",
+            repo_type="model",  # optional but good practice
         )
 
+        logging.info(f"Downloaded model to {downloaded_model_path}")
+        # Copy to local path for future use
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        shutil.copy(downloaded_model_path, model_path)
+    import fairseq
     from fairseq.data.dictionary import Dictionary
     from torch.serialization import safe_globals
 
@@ -103,10 +114,7 @@ def extract_feature(
 def main(args: Args):
     # Initialize accelerator for multi-GPU, mixed precision, etc.
     accelerator = Accelerator(mixed_precision="fp16" if args.is_half else "no")
-    accelerator.print(f"Using device: {accelerator.device}")
-
-    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-    os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+    logger.info(f"Using device: {accelerator.device}")
 
     model, saved_cfg = load_model(args.model_path, accelerator, args.version)
 
@@ -118,10 +126,10 @@ def main(args: Args):
     wav_files = wav_files[args.i_part :: args.n_part]
 
     if not wav_files:
-        accelerator.print("No .wav files found to process.")
+        logger.warning("No .wav files found to process.")
         return
 
-    accelerator.print(f"Processing {len(wav_files)} files...")
+    logger.info(f"Processing {len(wav_files)} files...")
 
     for file in tqdm(wav_files, desc="Extracting features", ncols=80, disable=not accelerator.is_local_main_process):
         try:
@@ -130,9 +138,9 @@ def main(args: Args):
                 continue
             extract_feature(file, out_file, model, saved_cfg, accelerator, args.version)
         except Exception:
-            logging.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
+            logger.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
 
-    accelerator.print("✅ Feature extraction completed successfully.")
+    logger.info("✅ Feature extraction completed successfully.")
 
 
 if __name__ == "__main__":

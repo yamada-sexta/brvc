@@ -17,6 +17,11 @@ dependencies = [
     "torchcrepe>=0.0.24",
     "transformers>=4.56.1",
     "typed-argument-parser>=1.11.0",
+    "fairseq",
 ]
 [project.scripts]
 hello = "jurigged"
+
+
+[tool.uv.sources]
+fairseq = { git = "https://github.com/yamada-sexta/fairseq.git" }
