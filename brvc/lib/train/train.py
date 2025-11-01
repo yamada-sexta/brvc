@@ -77,45 +77,6 @@ from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
 
-
-# class TrainArgs(Tap):
-#     """Training arguments."""
-
-#     # Required
-#     train_filelist: str = "filelists/train.txt"  # Path to training filelist
-#     model_dir: str = "logs/model"  # Directory to save checkpoints
-
-#     # Training
-#     epochs: int = 20000  # Number of epochs
-#     batch_size: int = 4  # Batch size per GPU
-#     learning_rate: float = 1e-4  # Learning rate
-#     lr_decay: float = 0.999875  # Learning rate decay
-#     seed: int = 1234  # Random seed
-
-#     # Data
-#     sample_rate: int = 48000  # Sampling rate
-#     hop_length: int = 480  # Hop length
-#     win_length: int = 2048  # Window length
-#     max_text_len: int = 5000  # Maximum text length
-#     min_text_len: int = 1  # Minimum text length
-#     max_wav_value: float = 32768.0  # Maximum waveform value
-#     filter_length: int = 2048  # Filter length
-
-#     # Optimizer
-#     eps: float = 1e-9  # Epsilon for optimizer
-#     betas: tuple = (0.8, 0.99)  # Betas for optimizer
-
-#     # Checkpointing
-#     save_every_epoch: int = 10  # Save checkpoint every N epochs
-#     log_interval: int = 200  # Log every N steps
-#     pretrain_g: str = ""  # Pretrained generator path
-#     pretrain_d: str = ""  # Pretrained discriminator path
-
-#     # Data loading
-#     num_workers: int = 4
-#     prefetch_factor: int = 8
-
-
 def save_checkpoint(
     accelerator: Accelerator,
     net_g: torch.nn.Module,
