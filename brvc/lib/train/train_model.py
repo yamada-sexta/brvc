@@ -10,6 +10,7 @@ from accelerate.logging import get_logger
 
 from lib.train.loss import discriminator_loss, feature_loss, generator_loss, kl_loss
 from lib.train.utils.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
+from lib.train.utils.save_final import save_final
 from lib.utils.misc import clip_grad_value_
 from lib.utils.slice import slice_segments
 
@@ -426,6 +427,32 @@ def train_model(
             epochs,
             global_step,
             exp_dir,
+        )
+
+        save_final(
+            ckpt=accelerator.unwrap_model(net_g).state_dict(),
+            sr=sample_rate,
+            filter_length=filter_length,
+            inner_channels=m["inter_channels"],
+            hidden_channels=m["hidden_channels"],
+            filter_channels=m["filter_channels"],
+            n_heads=m["n_heads"],
+            n_layers=m["n_layers"],
+            kernel_size=m["kernel_size"],
+            p_dropout=m["p_dropout"],
+            resblock=m["resblock"],
+            resblock_kernel_sizes=m["resblock_kernel_sizes"],
+            resblock_dilation_sizes=m["resblock_dilation_sizes"],
+            upsample_rates=m["upsample_rates"],
+            upsample_initial_channel=m["upsample_initial_channel"],
+            upsample_kernel_sizes=m["upsample_kernel_sizes"],
+            spk_embed_dim=m["spk_embed_dim"],
+            gin_channels=m["gin_channels"],
+            sampling_rate=default_config["data"]["sampling_rate"],
+            if_f0=True,
+            name=exp_dir.name,
+            epoch=epochs,
+            version="v2",
         )
 
 
