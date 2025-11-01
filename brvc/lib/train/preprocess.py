@@ -17,21 +17,6 @@ from lib.utils.slicer import Slicer
 
 logger = logging.getLogger(__name__)
 
-
-# class PreprocessArgs(Tap):
-#     """
-#     Preprocessing arguments
-#     """
-
-#     input_root: str  # Path to the input data root directory
-#     output_root: str  # Path to the output data root directory
-#     sample_rate: int = 48000  # Input sample rate
-#     per: float = 3.7  # Segment length in seconds
-#     overlap: float = 0.3  # Overlap in seconds
-#     max_amp: float = 0.9  # Max amplitude for normalization
-#     alpha: float = 0.75  # Mixing factor for normalization
-
-
 def init_dirs(output_root: str) -> tuple[str, str]:
     """Create required output directories."""
     gt_wavs_dir = os.path.join(output_root, "0_gt_wavs")
@@ -162,7 +147,7 @@ def preprocess_dataset(
         hop_size=15,
         max_sil_kept=500,
     )
-    res = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)
+    res: tuple[NDArray, NDArray] = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)
     if isinstance(res, tuple) and len(res) == 2:
         b, a = res
     else:

@@ -78,42 +78,42 @@ from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
 
 
-class TrainArgs(Tap):
-    """Training arguments."""
+# class TrainArgs(Tap):
+#     """Training arguments."""
 
-    # Required
-    train_filelist: str = "filelists/train.txt"  # Path to training filelist
-    model_dir: str = "logs/model"  # Directory to save checkpoints
+#     # Required
+#     train_filelist: str = "filelists/train.txt"  # Path to training filelist
+#     model_dir: str = "logs/model"  # Directory to save checkpoints
 
-    # Training
-    epochs: int = 20000  # Number of epochs
-    batch_size: int = 4  # Batch size per GPU
-    learning_rate: float = 1e-4  # Learning rate
-    lr_decay: float = 0.999875  # Learning rate decay
-    seed: int = 1234  # Random seed
+#     # Training
+#     epochs: int = 20000  # Number of epochs
+#     batch_size: int = 4  # Batch size per GPU
+#     learning_rate: float = 1e-4  # Learning rate
+#     lr_decay: float = 0.999875  # Learning rate decay
+#     seed: int = 1234  # Random seed
 
-    # Data
-    sample_rate: int = 48000  # Sampling rate
-    hop_length: int = 480  # Hop length
-    win_length: int = 2048  # Window length
-    max_text_len: int = 5000  # Maximum text length
-    min_text_len: int = 1  # Minimum text length
-    max_wav_value: float = 32768.0  # Maximum waveform value
-    filter_length: int = 2048  # Filter length
+#     # Data
+#     sample_rate: int = 48000  # Sampling rate
+#     hop_length: int = 480  # Hop length
+#     win_length: int = 2048  # Window length
+#     max_text_len: int = 5000  # Maximum text length
+#     min_text_len: int = 1  # Minimum text length
+#     max_wav_value: float = 32768.0  # Maximum waveform value
+#     filter_length: int = 2048  # Filter length
 
-    # Optimizer
-    eps: float = 1e-9  # Epsilon for optimizer
-    betas: tuple = (0.8, 0.99)  # Betas for optimizer
+#     # Optimizer
+#     eps: float = 1e-9  # Epsilon for optimizer
+#     betas: tuple = (0.8, 0.99)  # Betas for optimizer
 
-    # Checkpointing
-    save_every_epoch: int = 10  # Save checkpoint every N epochs
-    log_interval: int = 200  # Log every N steps
-    pretrain_g: str = ""  # Pretrained generator path
-    pretrain_d: str = ""  # Pretrained discriminator path
+#     # Checkpointing
+#     save_every_epoch: int = 10  # Save checkpoint every N epochs
+#     log_interval: int = 200  # Log every N steps
+#     pretrain_g: str = ""  # Pretrained generator path
+#     pretrain_d: str = ""  # Pretrained discriminator path
 
-    # Data loading
-    num_workers: int = 4
-    prefetch_factor: int = 8
+#     # Data loading
+#     num_workers: int = 4
+#     prefetch_factor: int = 8
 
 
 def save_checkpoint(
@@ -175,7 +175,27 @@ def load_pretrained(
 
 
 def run_train(
-    args: TrainArgs,
+    # args: TrainArgs,
+    train_filelist: str = "filelists/train.txt",
+    model_dir: str = "logs/model",
+    epochs: int = 20000,
+    batch_size: int = 4,
+    learning_rate: float = 1e-4,
+    lr_decay: float = 0.999875,
+    seed: int = 1234,
+    sample_rate: int = 48000,
+    hop_length: int = 480,
+    win_length: int = 2048,
+    max_text_len: int = 5000,
+    min_text_len: int = 1,
+    max_wav_value: float = 32768.0,
+    filter_length: int = 2048,
+    eps: float = 1e-9,
+    betas: tuple = (0.8, 0.99),
+    save_every_epoch: int = 10,
+    log_interval: int = 200,
+    pretrain_g: str = "",
+    pretrain_d: str = "",
 ):
     """Main training function."""
 
@@ -185,22 +205,22 @@ def run_train(
         gradient_accumulation_steps=1,
     )
 
-    set_seed(args.seed)
+    set_seed(seed)
 
     # Create model directory
     if accelerator.is_main_process:
-        os.makedirs(args.model_dir, exist_ok=True)
+        os.makedirs(model_dir, exist_ok=True)
 
     # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
-        audiopaths_and_text=args.train_filelist,
-        max_wav_value=args.max_wav_value,
-        sampling_rate=args.sample_rate,
-        filter_length=args.filter_length,
-        hop_length=args.hop_length,
-        win_length=args.win_length,
-        max_text_len=args.max_text_len,
-        min_text_len=args.min_text_len,
+        audiopaths_and_text=train_filelist,
+        max_wav_value=max_wav_value,
+        sampling_rate=sample_rate,
+        filter_length=filter_length,
+        hop_length=hop_length,
+        win_length=win_length,
+        max_text_len=max_text_len,
+        min_text_len=min_text_len,
     )
 
     logger.info(f"Training samples: {len(train_dataset)}", main_process_only=True)
@@ -220,8 +240,8 @@ def run_train(
     # Models
     m = default_config["model"]
     net_g = SynthesizerTrnMsNSFsid(
-        spec_channels=args.filter_length // 2 + 1,
-        segment_size=default_config["train"]["segment_size"] // args.hop_length,
+        spec_channels=filter_length // 2 + 1,
+        segment_size=default_config["train"]["segment_size"] // hop_length,
         inter_channels=m["inter_channels"],
         hidden_channels=m["hidden_channels"],
         filter_channels=m["filter_channels"],
@@ -247,21 +267,21 @@ def run_train(
     # Optimizers
     optim_g = torch.optim.AdamW(
         net_g.parameters(),
-        lr=args.learning_rate,
-        betas=args.betas,
-        eps=args.eps,
+        lr=learning_rate,
+        betas=betas,
+        eps=eps,
     )
 
     optim_d = torch.optim.AdamW(
         net_d.parameters(),
-        lr=args.learning_rate,
-        betas=args.betas,
-        eps=args.eps,
+        lr=learning_rate,
+        betas=betas,
+        eps=eps,
     )
 
     # Schedulers
-    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=args.lr_decay)
-    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=args.lr_decay)
+    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=lr_decay)
+    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=lr_decay)
 
     # Prepare with accelerator
     net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d = (
@@ -271,21 +291,21 @@ def run_train(
     )
 
     # Load pretrained
-    if args.pretrain_g:
-        load_pretrained(net_g, args.pretrain_g, accelerator)
-    if args.pretrain_d:
-        load_pretrained(net_d, args.pretrain_d, accelerator)
+    if pretrain_g:
+        load_pretrained(net_g, pretrain_g, accelerator)
+    if pretrain_d:
+        load_pretrained(net_d, pretrain_d, accelerator)
     # Training loop
     global_step = 0
-    logger.info(f"Starting training for {args.epochs} epochs")
-    for epoch in range(1, args.epochs + 1):
+    logger.info(f"Starting training for {epochs} epochs")
+    for epoch in range(1, epochs + 1):
         net_g.train()
         net_d.train()
 
         progress_bar = tqdm(
             train_loader,
             disable=not accelerator.is_main_process,
-            desc=f"Epoch {epoch}/{args.epochs}",
+            desc=f"Epoch {epoch}/{epochs}",
         )
 
         for batch_idx, batch in enumerate(progress_bar):
@@ -321,7 +341,7 @@ def run_train(
                 y_mel = slice_segments(
                     mel,
                     ids_slice,
-                    default_config["train"]["segment_size"] // args.hop_length,
+                    default_config["train"]["segment_size"] // hop_length,
                 )
 
                 y_hat_mel = mel_spectrogram_torch(
@@ -329,8 +349,8 @@ def run_train(
                     default_config["data"]["filter_length"],
                     default_config["data"]["n_mel_channels"],
                     default_config["data"]["sampling_rate"],
-                    args.hop_length,
-                    args.win_length,
+                    hop_length,
+                    win_length,
                     default_config["data"]["mel_fmin"],
                     default_config["data"]["mel_fmax"],
                 )
@@ -340,7 +360,7 @@ def run_train(
 
                 wave = slice_segments(
                     wave,
-                    ids_slice * args.hop_length,
+                    ids_slice * hop_length,
                     default_config["train"]["segment_size"],
                 )
 
@@ -372,7 +392,7 @@ def run_train(
             global_step += 1
 
             # Logging
-            if global_step % args.log_interval == 0 and accelerator.is_main_process:
+            if global_step % log_interval == 0 and accelerator.is_main_process:
                 lr = optim_g.param_groups[0]["lr"]
 
                 # Clamp extreme values for logging
@@ -421,7 +441,7 @@ def run_train(
         scheduler_d.step()
 
         # Save checkpoint
-        if epoch % args.save_every_epoch == 0:
+        if epoch % save_every_epoch == 0:
             save_checkpoint(
                 accelerator,
                 net_g,
@@ -430,7 +450,7 @@ def run_train(
                 optim_d,
                 epoch,
                 global_step,
-                args.model_dir,
+                model_dir,
             )
 
         accelerator.wait_for_everyone()
@@ -444,15 +464,18 @@ def run_train(
             net_d,
             optim_g,
             optim_d,
-            args.epochs,
+            epochs,
             global_step,
-            args.model_dir,
+            model_dir,
         )
 
 
 def main():
-    args = TrainArgs().parse_args()
-    run_train(args)
+    # args = TrainArgs().parse_args()
+    # run_train(args)
+    from tap import tapify
+
+    tapify(run_train)()
 
 
 if __name__ == "__main__":
