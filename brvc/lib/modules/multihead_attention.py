@@ -114,16 +114,54 @@ class MultiHeadAttention(nn.Module):
         # Input mask is [batch, time_q, time_kv] where 0 means mask out
         # MultiheadAttention expects mask where True/1.0 means mask out
         if attn_mask is not None:
-            # Convert from [batch, time_q, time_kv] to [batch*n_heads, time_q, time_kv]
-            # and invert the mask (0 -> True, 1 -> False)
-            attn_mask = (attn_mask == 0).float()  # Invert: 0 -> 1.0, 1 -> 0.0
-            # Expand to match MultiheadAttention expected format
-            batch_size = attn_mask.shape[0]
-            attn_mask = attn_mask.unsqueeze(1)  # [batch, 1, time_q, time_kv]
-            attn_mask = attn_mask.expand(batch_size, self.n_heads, -1, -1)  # [batch, n_heads, time_q, time_kv]
-            attn_mask = attn_mask.reshape(batch_size * self.n_heads, attn_mask.shape[2], attn_mask.shape[3])  # [batch*n_heads, time_q, time_kv]
-            # Convert to boolean mask (True means attend, False means mask out)
-            attn_mask = (attn_mask == 0)
+            # Accept several input formats for attn_mask coming from upstream modules:
+            #  - [batch, time_q, time_kv]
+            #  - [batch, 1, time_q, time_kv]
+            #  - [batch, n_heads, time_q, time_kv]
+            # Upstream uses 0 to mean "mask out". PyTorch's MultiheadAttention expects a
+            # boolean mask where True indicates positions that should be masked. We'll
+            # normalize to a boolean tensor of shape [batch*n_heads, time_q, time_kv].
+
+            # If numeric, convert to boolean mask where True means masked (attn_mask==0)
+            mask = attn_mask
+            # If mask is float/int, compare to zero to produce boolean
+            if not torch.is_tensor(mask):
+                mask = torch.tensor(mask, device=q.device)
+
+            # Normalize to CPU/GPU/device and boolean
+            mask = (mask == 0)
+
+            if mask.dim() == 3:
+                # [batch, time_q, time_kv] -> expand over heads
+                batch_size = mask.size(0)
+                mask = mask.unsqueeze(1)  # [batch, 1, time_q, time_kv]
+                mask = mask.expand(batch_size, self.n_heads, -1, -1)
+                mask = mask.reshape(batch_size * self.n_heads, mask.size(2), mask.size(3))
+                attn_mask = mask
+            elif mask.dim() == 4:
+                # Could be [batch, 1, time_q, time_kv] or [batch, n_heads, time_q, time_kv]
+                batch_size = mask.size(0)
+                if mask.size(1) == 1:
+                    # squeeze the singleton head dim and expand across heads
+                    mask = mask.squeeze(1)  # [batch, time_q, time_kv]
+                    mask = mask.unsqueeze(1).expand(batch_size, self.n_heads, -1, -1)
+                    mask = mask.reshape(batch_size * self.n_heads, mask.size(2), mask.size(3))
+                    attn_mask = mask
+                elif mask.size(1) == self.n_heads:
+                    # Already has head dim: reshape to [batch*n_heads, time_q, time_kv]
+                    attn_mask = mask.reshape(batch_size * self.n_heads, mask.size(2), mask.size(3))
+                else:
+                    # Unexpected head dimension size: try to squeeze any singleton dims
+                    # and fall back to treating as [batch, time_q, time_kv]
+                    squeezed = mask.squeeze()
+                    if squeezed.dim() == 3:
+                        batch_size = squeezed.size(0)
+                        attn_mask = squeezed.unsqueeze(1).expand(batch_size, self.n_heads, -1, -1)
+                        attn_mask = attn_mask.reshape(batch_size * self.n_heads, attn_mask.size(2), attn_mask.size(3))
+                    else:
+                        raise ValueError(f"Unsupported attn_mask shape: {tuple(attn_mask.shape)}")
+            else:
+                raise ValueError(f"Unsupported attn_mask number of dims: {attn_mask.dim()}")
         
         # Apply MultiheadAttention
         attn_output, _ = self.mha(q, k, v, attn_mask=attn_mask, need_weights=False)

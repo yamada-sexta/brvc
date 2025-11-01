@@ -10,3 +10,5 @@ __pycache__
 *.npy
 
 *.pt
+experiments/data/D_240.pth
+/experiments

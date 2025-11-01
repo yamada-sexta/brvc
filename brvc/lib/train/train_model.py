@@ -134,12 +134,10 @@ def load_pretrained(
 
 
 def train_model(
-    train_files: Union[Path, List[Tuple[str, str, str, str, str]]] = Path(
-        "filelists/train.txt"
-    ),
-    exp_dir: Path = Path("logs/model"),
+    train_files: Union[Path, List[Tuple[str, str, str, str, str]]],
+    exp_dir: Path,
     epochs: int = 20000,
-    batch_size: int = 4,
+    # batch_size: int = 4,
     learning_rate: float = 1e-4,
     lr_decay: float = 0.999875,
     seed: int = 1234,
