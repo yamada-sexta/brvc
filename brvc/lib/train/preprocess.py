@@ -88,7 +88,7 @@ def process_file(
             logging.error(f"Failed to load audio: {path}")
             return
 
-        audio: NDArray = signal.lfilter(b, a, audio)
+        audio: NDArray = signal.lfilter(b, a, audio) # type: ignore
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):

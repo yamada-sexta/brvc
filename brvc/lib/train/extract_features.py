@@ -24,9 +24,6 @@ class Args(Tap):
     input_dir: str  # Path to input data directory containing wavs
     output_dir: str  # Path to save extracted features
     version: Literal["v1", "v2"] = "v2"  # 'v1' or 'v2'
-    n_part: int = 1  # Total parts (for parallel jobs)
-    i_part: int = 0  # Current part index
-    i_gpu: int = 0  # GPU index if CUDA
     is_half: bool = False  # Use half precision (fp16)
     model_path: str = "assets/hubert/hubert_base.pt"  # HuBERT model path
 
@@ -124,7 +121,7 @@ def main(args: Args):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     wav_files = sorted(wav_dir.glob("*.wav"))
-    wav_files = wav_files[args.i_part :: args.n_part]
+    # wav_files = wav_files[args.i_part :: args.n_part]
 
     if not wav_files:
         logger.warning("No .wav files found to process.")
