@@ -18,18 +18,18 @@ from lib.utils.slicer import Slicer
 logger = logging.getLogger(__name__)
 
 
-class PreprocessArgs(Tap):
-    """
-    Preprocessing arguments
-    """
+# class PreprocessArgs(Tap):
+#     """
+#     Preprocessing arguments
+#     """
 
-    input_root: str  # Path to the input data root directory
-    output_root: str  # Path to the output data root directory
-    sample_rate: int = 48000  # Input sample rate
-    per: float = 3.7  # Segment length in seconds
-    overlap: float = 0.3  # Overlap in seconds
-    max_amp: float = 0.9  # Max amplitude for normalization
-    alpha: float = 0.75  # Mixing factor for normalization
+#     input_root: str  # Path to the input data root directory
+#     output_root: str  # Path to the output data root directory
+#     sample_rate: int = 48000  # Input sample rate
+#     per: float = 3.7  # Segment length in seconds
+#     overlap: float = 0.3  # Overlap in seconds
+#     max_amp: float = 0.9  # Max amplitude for normalization
+#     alpha: float = 0.75  # Mixing factor for normalization
 
 
 def init_dirs(output_root: str) -> tuple[str, str]:
@@ -63,8 +63,9 @@ def save_audio(
         sr = resample_sr
         # wavfile.write(path, resample_sr, audio.astype(np.float32))
     # else:
-        # wavfile.write(path, sr, audio.astype(np.float32))
+    # wavfile.write(path, sr, audio.astype(np.float32))
     wavfile.write(path, sr, audio.astype(np.float32))
+
 
 def process_file(
     path: str,
@@ -88,7 +89,7 @@ def process_file(
             logging.error(f"Failed to load audio: {path}")
             return
 
-        audio: NDArray = signal.lfilter(b, a, audio) # type: ignore
+        audio: NDArray = signal.lfilter(b, a, audio)  # type: ignore
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):
@@ -123,46 +124,75 @@ def process_file(
         logging.error(f"Failed to process {path}\n{traceback.format_exc()}")
 
 
-def preprocess_dataset(args: PreprocessArgs) -> None:
-    """Main preprocessing pipeline."""
+def preprocess_dataset(
+    input_root: str,
+    output_root: str,
+    sample_rate: int = 48000,
+    per: float = 3.7,
+    overlap: float = 0.3,
+    max_amp: float = 0.9,
+    alpha: float = 0.75,
+) -> None:
+    """Main preprocessing pipeline.
+
+    Parameters
+    ----------
+    input_root : str
+        Path to the input data root directory.
+    output_root : str
+        Path to the output data root directory.
+    sample_rate : int, optional
+        Input sample rate.
+    per : float, optional
+        Segment length in seconds
+    overlap : float, optional
+        Overlap in seconds.
+    max_amp : float, optional
+        Max amplitude for normalization.
+    alpha : float, optional
+        Mixing factor for normalization.
+    """
     logging.info("Starting preprocessing...")
 
     slicer = Slicer(
-        sr=args.sample_rate,
+        sr=sample_rate,
         threshold=-42,
         min_length=1500,
         min_interval=400,
         hop_size=15,
         max_sil_kept=500,
     )
-    res = signal.butter(N=5, Wn=48, btype="high", fs=args.sample_rate)
+    res = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)
     if isinstance(res, tuple) and len(res) == 2:
         b, a = res
     else:
         raise ValueError("Unexpected result from signal.butter")
-    
-    gt_wavs_dir, wavs16k_dir = init_dirs(args.output_root)
-    files = sorted(os.listdir(args.input_root))
+
+    gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
+    files = sorted(os.listdir(input_root))
 
     for idx, fname in enumerate(tqdm(files, desc="Processing audio files")):
-        path = os.path.join(args.input_root, fname)
+        path = os.path.join(input_root, fname)
         process_file(
             path=path,
             idx=idx,
-            sr=args.sample_rate,
+            sr=sample_rate,
             slicer=slicer,
             filter_coeffs=(b, a),
             gt_wavs_dir=gt_wavs_dir,
             wavs16k_dir=wavs16k_dir,
-            per=args.per,
-            overlap=args.overlap,
-            max_amp=args.max_amp,
-            alpha=args.alpha,
+            per=per,
+            overlap=overlap,
+            max_amp=max_amp,
+            alpha=alpha,
         )
 
     logging.info("Finished preprocessing!")
 
 
 if __name__ == "__main__":
-    args = PreprocessArgs().parse_args()
-    preprocess_dataset(args)
+    # args = PreprocessArgs().parse_args()
+    # preprocess_dataset(
+    from tap import tapify
+
+    tapify(preprocess_dataset)
