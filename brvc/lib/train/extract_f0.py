@@ -115,7 +115,7 @@ class AudioDataset(Dataset):
 #     logger.info("All F0 features extracted successfully.")
 
 
-def extract_f0(exp_dir: Path, sample_rate: int = 44100):
+def extract_f0(exp_dir: Path, sample_rate: int = 48000) -> None:
     accelerator = Accelerator()
     device = accelerator.device
     logger.info(f"Using device: {device}", main_process_only=True)

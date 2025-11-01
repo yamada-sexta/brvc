@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 from accelerate.utils import set_seed
 from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
@@ -133,8 +133,10 @@ def load_pretrained(
     unwrapped.load_state_dict(state_dict)
 
 
-def run_train(
-    train_filelist: Path = Path("filelists/train.txt"),
+def train_model(
+    train_files: Union[Path, List[Tuple[str, str, str, str, str]]] = Path(
+        "filelists/train.txt"
+    ),
     exp_dir: Path = Path("logs/model"),
     epochs: int = 20000,
     batch_size: int = 4,
@@ -154,14 +156,13 @@ def run_train(
     log_interval: int = 200,
     pretrain_g: Optional[Path] = None,
     pretrain_d: Optional[Path] = None,
+    # is_half: bool = False,
 ):
     """Main training function."""
 
     # Initialize accelerator
-    accelerator = Accelerator(
-        mixed_precision="fp16" if default_config["train"]["fp16_run"] else "no",
-        gradient_accumulation_steps=1,
-    )
+
+    accelerator = Accelerator()
 
     set_seed(seed)
 
@@ -171,7 +172,7 @@ def run_train(
 
     # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
-        audiopaths_and_text=str(train_filelist),
+        audiopaths_and_text=train_files,
         max_wav_value=max_wav_value,
         sampling_rate=sample_rate,
         filter_length=filter_length,
@@ -216,7 +217,8 @@ def run_train(
         spk_embed_dim=m["spk_embed_dim"],
         gin_channels=m["gin_channels"],
         sr=default_config["data"]["sampling_rate"],
-        is_half=default_config["train"]["fp16_run"],
+        # is_half=is_half,
+        lrelu_slope=0.1,
         txt_channels=768,
     )
 
@@ -431,7 +433,8 @@ def run_train(
 
 def main():
     from tap import tapify
-    tapify(run_train)
+
+    tapify(train_model)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
         spk_embed_dim: int,
         gin_channels: int,
         sr: Union[str, int],
-        is_half: bool,
+        # is_half: bool,
         txt_channels: int = 768,
         lrelu_slope: float = 0.1,
         **kwargs: Any,
@@ -91,7 +91,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
             upsample_kernel_sizes,
             gin_channels=gin_channels,
             sr=sr,
-            is_half=is_half,
+            # is_half=is_half,
             lrelu_slope=lrelu_slope,
         )
         self.enc_q = PosteriorEncoder(

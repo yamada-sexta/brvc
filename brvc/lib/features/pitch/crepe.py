@@ -12,7 +12,7 @@ class CRePE(pitch_predictor.PitchPredictor):
         hop_length: int = 512,
         f0_min: int = 50,
         f0_max: int = 1100,
-        sample_rate: int = 44100,
+        sample_rate: int = 48000,
         device: Union[str, torch.device] = "cpu",
     ):
         if "privateuseone" in str(device):

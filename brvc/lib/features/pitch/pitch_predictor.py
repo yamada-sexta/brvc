@@ -22,7 +22,7 @@ class PitchPredictor(abc.ABC):
         hop_length: int = 512,
         f0_min: int = 50,
         f0_max: int = 1100,
-        sampling_rate: int = 44100,
+        sampling_rate: int = 48000,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.hop_length = hop_length

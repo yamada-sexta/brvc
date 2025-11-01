@@ -30,7 +30,7 @@ class SourceModuleHnNSF(nn.Module):
         sine_amp: float,
         add_noise_std: float,
         voiced_threshod: float,
-        is_half: bool,
+        # is_half: bool,
     ):
         """
         harmonic_num=0,
@@ -43,7 +43,7 @@ class SourceModuleHnNSF(nn.Module):
 
         self.sine_amp = sine_amp
         self.noise_std = add_noise_std
-        self.is_half = is_half
+        # self.is_half = is_half
         # to produce sine waveforms
         self.l_sin_gen = SineGen(
             sampling_rate, harmonic_num, sine_amp, add_noise_std, voiced_threshod
@@ -79,7 +79,7 @@ def test():
         sine_amp=0.1,
         add_noise_std=0.003,
         voiced_threshod=0,
-        is_half=False,
+        # is_half=False,
     )
     sine_merge, noise, uv = source_module(f0, upp=4)
     print(sine_merge.shape)
