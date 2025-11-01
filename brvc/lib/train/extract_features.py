@@ -16,7 +16,7 @@ import soundfile as sf
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from huggingface_hub import hf_hub_download
-
+from fairseq.models.hubert.hubert import HubertModel
 logger = get_logger(__name__)
 
 
@@ -33,9 +33,9 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
     return feats.view(1, -1)
 
 
-def load_model(
+def load_hubert_model(
     model_path: Path, accelerator: Accelerator
-) -> tuple[torch.nn.Module, DictConfig]:
+) -> tuple[HubertModel, DictConfig]:
     """Load and prepare the HuBERT model."""
     if not model_path.exists():
         logging.info(f"{model_path} not found. Downloading from Hugging Face...")
@@ -132,7 +132,7 @@ def extract_features(
     accelerator = Accelerator(mixed_precision="fp16" if is_half else "no")
     logger.info(f"Using device: {accelerator.device}")
 
-    model, saved_cfg = load_model(model_path, accelerator)
+    model, saved_cfg = load_hubert_model(model_path, accelerator)
 
     wav_dir = exp_dir / "1_16k_wavs"
     # out_dir = Path(output_dir)

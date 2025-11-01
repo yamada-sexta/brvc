@@ -5,6 +5,30 @@ import numpy as np
 import abc
 from numpy.typing import NDArray
 
+def mel_scale(f0: np.ndarray) -> np.ndarray:
+    """Convert linear frequency (Hz) to Mel scale."""
+    return 1127 * np.log1p(f0 / 700)
+
+def coarse_f0(
+    f0: np.ndarray,
+    f0_bin: int = 256,
+    f0_min: float = 50.0,
+    f0_max: float = 1100.0,
+) -> np.ndarray:
+    """Quantize continuous F0 into discrete coarse Mel bins."""
+    f0_mel = mel_scale(f0)
+    f0_mel_min = mel_scale(np.array([f0_min]))[0]
+    f0_mel_max = mel_scale(np.array([f0_max]))[0]
+
+    mask = f0_mel > 0
+    f0_mel[mask] = (f0_mel[mask] - f0_mel_min) * (f0_bin - 2) / (
+        f0_mel_max - f0_mel_min
+    ) + 1
+
+    f0_mel = np.clip(f0_mel, 1, f0_bin - 1)
+    return np.rint(f0_mel).astype(int)
+
+
 
 class PitchPredictor(abc.ABC):
     """
@@ -95,3 +119,16 @@ class PitchPredictor(abc.ABC):
         )
         res = np.nan_to_num(target).astype(np.float32)
         return res
+
+    def coarse_f0(
+        self,
+        f0: NDArray[np.float32],
+        f0_bin: int = 256,
+    ) -> NDArray[np.int32]:
+        """Quantize continuous F0 into discrete coarse Mel bins."""
+        return coarse_f0(
+            f0,
+            f0_bin=f0_bin,
+            f0_min=self.f0_min,
+            f0_max=self.f0_max,
+        )

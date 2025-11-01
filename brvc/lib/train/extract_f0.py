@@ -84,37 +84,6 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx):
         return self.paths[idx]
 
-
-# def extract_f0(
-#     exp_dir: Path,
-#     sample_rate: int = 44100,
-# ) -> None:
-#     """Main F0 extraction logic using CRePE."""
-#     accelerator = Accelerator()
-#     device = accelerator.device
-
-#     logger.info(f"Using device: {device}", main_process_only=True)
-
-#     paths = collect_audio_paths(exp_dir)
-#     pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
-
-#     logger.info(
-#         f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
-#     )
-
-#     for inp, opt1, opt2 in tqdm(
-#         paths,
-#         desc="Extracting F0",
-#         unit="file",
-#         disable=not accelerator.is_main_process,
-#     ):
-#         extract_f0_pair(inp, opt1, opt2, pitch_extractor)
-
-#     accelerator.wait_for_everyone()
-
-#     logger.info("All F0 features extracted successfully.")
-
-
 def extract_f0(exp_dir: Path, sample_rate: int = 48000) -> None:
     accelerator = Accelerator()
     device = accelerator.device
