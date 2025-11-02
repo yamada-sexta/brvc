@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List
 from numpy.typing import NDArray
 import resampy
 
@@ -9,6 +9,9 @@ from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.utils.audio import load_audio
 import numpy as np
 import logging
+import torch
+import torch.nn.functional as F
+from scipy import signal
 
 from typing import TYPE_CHECKING
 
@@ -17,6 +20,79 @@ if TYPE_CHECKING:
     from accelerate import Accelerator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# High-pass filter for audio preprocessing
+bh, ah, _ = signal.butter(N=5, Wn=48, btype="high", fs=16000)
+
+
+def change_rms(
+    data1: NDArray[np.float32],
+    sr1: int,
+    data2: NDArray[np.float32],
+    sr2: int,
+    rate: float,
+) -> NDArray[np.float32]:
+    """
+    Mix RMS levels from input audio (data1) with output audio (data2).
+    
+    Parameters
+    ----------
+    data1 : NDArray[np.float32]
+        Input audio data
+    sr1 : int
+        Sample rate of input audio
+    data2 : NDArray[np.float32]
+        Output audio data
+    sr2 : int
+        Sample rate of output audio
+    rate : float
+        Mix rate (0.0 = use data1 RMS, 1.0 = use data2 RMS)
+    
+    Returns
+    -------
+    NDArray[np.float32]
+        Audio with mixed RMS levels
+    """
+    rms1 = np.sqrt(
+        np.mean(
+            np.square(
+                data1.reshape(-1, sr1 // 2)
+                if len(data1) >= sr1 // 2
+                else data1.reshape(1, -1)
+            ),
+            axis=1,
+        )
+    )
+    rms2 = np.sqrt(
+        np.mean(
+            np.square(
+                data2.reshape(-1, sr2 // 2)
+                if len(data2) >= sr2 // 2
+                else data2.reshape(1, -1)
+            ),
+            axis=1,
+        )
+    )
+    
+    rms1_tensor = torch.from_numpy(rms1).unsqueeze(0)
+    rms2_tensor = torch.from_numpy(rms2).unsqueeze(0)
+    
+    rms1_interp = F.interpolate(
+        rms1_tensor.unsqueeze(0), size=data2.shape[0], mode="linear", align_corners=False
+    ).squeeze()
+    rms2_interp = F.interpolate(
+        rms2_tensor.unsqueeze(0), size=data2.shape[0], mode="linear", align_corners=False
+    ).squeeze()
+    
+    rms2_interp = torch.max(rms2_interp, torch.zeros_like(rms2_interp) + 1e-6)
+    
+    data2_tensor = torch.from_numpy(data2)
+    data2_tensor *= (
+        torch.pow(rms1_interp, torch.tensor(1 - rate))
+        * torch.pow(rms2_interp, torch.tensor(rate - 1))
+    )
+    
+    return data2_tensor.numpy().astype(np.float32)
 
 
 def resample_audio(
@@ -50,10 +126,44 @@ def resample_audio(
 def interface_cli(
     g_path: Path,
     audio: Path,
+    output: Optional[Path] = None,
     sample_rate: int = 48000,
+    f0_up_key: int = 0,
+    f0_method: str = "crepe",
+    index_rate: float = 0.0,
+    protect: float = 0.33,
+    rms_mix_rate: float = 0.25,
+    resample_sr: int = 0,
 ):
+    """
+    CLI interface for voice conversion inference.
+    
+    Parameters
+    ----------
+    g_path : Path
+        Path to the generator model checkpoint
+    audio : Path
+        Path to input audio file
+    output : Optional[Path]
+        Path to save output audio (default: input_path + '_out.wav')
+    sample_rate : int
+        Target sample rate for processing (default: 48000)
+    f0_up_key : int
+        Pitch shift in semitones (default: 0)
+    f0_method : str
+        F0 extraction method: 'crepe', 'harvest', 'pm', 'rmvpe' (default: 'crepe')
+    index_rate : float
+        Feature index retrieval rate, 0.0-1.0 (default: 0.0, disabled)
+    protect : float
+        Protection for consonants, 0.0-0.5 (default: 0.33)
+    rms_mix_rate : float
+        RMS mixing rate with original audio, 0.0-1.0 (default: 0.25)
+    resample_sr : int
+        Final output sample rate, 0 to keep same as sample_rate (default: 0)
+    """
     from accelerate import Accelerator
     import torch
+    import soundfile as sf
 
     logger.info("Starting inference...")
     accelerator = Accelerator()
@@ -99,12 +209,32 @@ def interface_cli(
     net_g.eval()
     net_g.to(device)
 
-    return inference(
+    audio_out = inference(
         net_g=net_g,
         audio=audio_data,
         sample_rate=sample_rate,
         accelerator=accelerator,
+        f0_up_key=f0_up_key,
+        f0_method=f0_method,
+        index_rate=index_rate,
+        protect=protect,
+        rms_mix_rate=rms_mix_rate,
+        resample_sr=resample_sr if resample_sr > 0 else sample_rate,
     )
+    
+    # Determine output path
+    if output is None:
+        output = audio.parent / f"{audio.stem}_out.wav"
+    
+    # Ensure output directory exists
+    output.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Save output audio
+    logger.info(f"Saving output to {output}...")
+    sf.write(output, audio_out, sample_rate if resample_sr == 0 else resample_sr)
+    
+    logger.info("Inference complete!")
+    return output
 
 
 def inference(
@@ -112,15 +242,60 @@ def inference(
     audio: NDArray[np.float32],
     accelerator: "Accelerator",
     sample_rate: int = 48000,
+    f0_up_key: int = 0,
+    f0_method: str = "crepe",
+    index_rate: float = 0.0,
+    protect: float = 0.33,
+    rms_mix_rate: float = 0.25,
+    resample_sr: int = 48000,
 ) -> NDArray[np.float32]:
+    """
+    Perform voice conversion inference.
+    
+    Parameters
+    ----------
+    net_g : SynthesizerTrnMsNSFsid
+        Generator model
+    audio : NDArray[np.float32]
+        Input audio data
+    accelerator : Accelerator
+        Accelerate device wrapper
+    sample_rate : int
+        Sample rate of input audio
+    f0_up_key : int
+        Pitch shift in semitones
+    f0_method : str
+        F0 extraction method
+    index_rate : float
+        Feature index retrieval rate (not currently used)
+    protect : float
+        Protection for consonants
+    rms_mix_rate : float
+        RMS mixing rate
+    resample_sr : int
+        Final output sample rate
+    
+    Returns
+    -------
+    NDArray[np.float32]
+        Converted audio
+    """
     import torch
 
     device = accelerator.device
+    
+    # Constants from Pipeline class
+    sr = 16000  # HuBERT input sample rate
+    window = 512  # Hop length for HuBERT
+    x_pad = 1  # Padding in seconds
+    
+    # Store original audio for RMS mixing
+    original_audio = audio.copy()
 
     logger.info("Loading F0 extractor...")
     from lib.features.pitch.crepe import CRePE
 
-    f0_extractor = CRePE(device=device, sample_rate=sample_rate)
+    f0_extractor = CRePE(device=device, sample_rate=sample_rate, hop_length=window)
 
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import load_hubert_model
@@ -133,14 +308,27 @@ def inference(
         logger.info(f"Loading audio from {audio}...")
         audio = load_audio(audio, sr=sample_rate)
 
+    # Apply high-pass filter
+    logger.info("Applying high-pass filter...")
+    audio_16k = resample_audio(audio, orig_sr=sample_rate, target_sr=16000)
+    audio_16k = signal.filtfilt(bh, ah, audio_16k)
+    
+    # Pad audio
+    t_pad = sr * x_pad
+    audio_pad = np.pad(audio_16k, (t_pad, t_pad), mode="reflect")
+    p_len = audio_pad.shape[0] // window
+
     logger.info("Extracting F0 and coarse F0...")
-    f0 = f0_extractor.compute_f0(audio)
-    f0nsf = f0_extractor.coarse_f0(audio)
+    f0 = f0_extractor.compute_f0(audio_16k, p_len=p_len)
+    
+    # Apply pitch shift
+    if f0_up_key != 0:
+        f0 *= pow(2, f0_up_key / 12)
+    
+    f0nsf = f0_extractor.coarse_f0(f0)
 
     logger.info("Extracting HuBERT features...")
-
-    resampled_audio = resample_audio(audio, orig_sr=sample_rate, target_sr=16000)
-    wav_tensor = torch.from_numpy(resampled_audio).unsqueeze(0).float().to(device)
+    wav_tensor = torch.from_numpy(audio_pad).unsqueeze(0).float().to(device)
     
     padding_mask = torch.BoolTensor(wav_tensor.shape).fill_(False).to(device)
     
@@ -154,26 +342,82 @@ def inference(
         logits = hubert_model.extract_features(**inputs)
         feats_tensor: torch.Tensor = logits[0]
 
-    # Checks
-    feats = feats_tensor.squeeze(0).float().cpu().numpy()
-    if not np.isnan(feats).any():
-        pass
-    else:
+    # Check for NaNs
+    if torch.isnan(feats_tensor).any():
         logger.warning("Extracted features contain NaNs, which may lead to issues.")
+    
+    # Store original features for protection
+    if protect < 0.5:
+        feats0 = feats_tensor.clone()
+    
+    # Interpolate features (upscale by 2x)
+    feats_tensor = F.interpolate(
+        feats_tensor.permute(0, 2, 1), scale_factor=2
+    ).permute(0, 2, 1)
+    
+    if protect < 0.5 and 'feats0' in locals():
+        feats0 = F.interpolate(
+            feats0.permute(0, 2, 1), scale_factor=2
+        ).permute(0, 2, 1)
+    
+    # Adjust feature length to match f0
+    if feats_tensor.shape[1] < p_len:
+        p_len = feats_tensor.shape[1]
+        f0 = f0[:p_len]
+        f0nsf = f0nsf[:p_len]
+    
+    # Convert to tensors
+    f0_tensor = torch.from_numpy(f0).unsqueeze(0).float().to(device)
+    f0nsf_tensor = torch.from_numpy(f0nsf).unsqueeze(0).long().to(device)
+    
+    # Apply consonant protection
+    if protect < 0.5 and 'feats0' in locals() and feats0.shape == feats_tensor.shape:
+        # Create protection mask based on F0 (voiced/unvoiced)
+        pitchff = f0_tensor.clone()
+        pitchff[f0_tensor > 0] = 1
+        pitchff[f0_tensor < 1] = protect
+        pitchff = pitchff.unsqueeze(-1)
+        
+        # Mix original and current features
+        feats_tensor = feats_tensor * pitchff + feats0 * (1 - pitchff)
+        feats_tensor = feats_tensor.to(feats0.dtype)
+    
     logger.info("Running synthesis...")
+    p_len_tensor = torch.tensor([p_len], device=device).long()
+    sid_tensor = torch.tensor([0], device=device).long()
+    
     with torch.no_grad():
-        f0_tensor = torch.from_numpy(f0).unsqueeze(0).float().to(device)
-        f0nsf_tensor = torch.from_numpy(f0nsf).unsqueeze(0).long().to(device)
-        feats_tensor = feats_tensor.to(device)
-
-        audio_out = net_g.infer(
-            feats_tensor,
-            f0_tensor,
-            f0nsf_tensor,
-            max_len=None,
-            use_noise_scale=0.3,
-            use_length_scale=1.0,
-        )[0][0, 0].data.cpu().float().numpy()
+        o, _, _ = net_g.infer(
+            phone=feats_tensor,
+            phone_lengths=p_len_tensor,
+            pitch=f0_tensor,
+            nsff0=f0nsf_tensor,
+            sid=sid_tensor,
+        )
+        # o shape: [batch, 1, time]
+        audio_out = o[0, 0].data.cpu().float().numpy()
+    
+    # Remove padding from output
+    t_pad_tgt = sample_rate * x_pad
+    if len(audio_out) > 2 * t_pad_tgt:
+        audio_out = audio_out[t_pad_tgt:-t_pad_tgt]
+    
+    # Apply RMS mixing
+    if rms_mix_rate != 1:
+        logger.info("Applying RMS mixing...")
+        audio_out = change_rms(
+            original_audio, sample_rate, audio_out, sample_rate, rms_mix_rate
+        )
+    
+    # Resample if needed
+    if resample_sr != sample_rate:
+        logger.info(f"Resampling from {sample_rate}Hz to {resample_sr}Hz...")
+        audio_out = resample_audio(audio_out, orig_sr=sample_rate, target_sr=resample_sr)
+    
+    # Normalize
+    audio_max = np.abs(audio_out).max() / 0.99
+    if audio_max > 1:
+        audio_out = audio_out / audio_max
 
     return audio_out
 
