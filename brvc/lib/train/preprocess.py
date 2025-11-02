@@ -143,6 +143,7 @@ def preprocess_dataset(
     # gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
     # files = sorted(os.listdir(audio_dir))
     files = audio_dir.glob("*.wav")
+    files = sorted(files)
     for idx, file in enumerate(
         tqdm(files, dynamic_ncols=True, desc="Processing audio files")
     ):

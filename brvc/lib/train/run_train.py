@@ -4,6 +4,8 @@ from typing import Union, Optional
 def run_training(
     audio_dir: Path,
     exp_dir: Optional[Path] = None,
+    save_every_epoch: Optional[int] = None,
+    epochs: int = 200,
 ):
     if not audio_dir.exists():
         raise FileNotFoundError(f"Audio directory {audio_dir} does not exist.")
@@ -56,7 +58,8 @@ def run_training(
     train_model(
         train_files=train_files,
         exp_dir=exp_dir,
-        epochs=200
+        epochs=epochs,
+        save_every_epoch=save_every_epoch,
     )
 
     pass

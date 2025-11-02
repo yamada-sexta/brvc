@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # High-pass filter for audio preprocessing
-bh, ah, _ = signal.butter(N=5, Wn=48, btype="high", fs=16000)
+bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
 
 
 def change_rms(
@@ -53,43 +53,40 @@ def change_rms(
     NDArray[np.float32]
         Audio with mixed RMS levels
     """
-    rms1 = np.sqrt(
-        np.mean(
-            np.square(
-                data1.reshape(-1, sr1 // 2)
-                if len(data1) >= sr1 // 2
-                else data1.reshape(1, -1)
-            ),
-            axis=1,
-        )
-    )
-    rms2 = np.sqrt(
-        np.mean(
-            np.square(
-                data2.reshape(-1, sr2 // 2)
-                if len(data2) >= sr2 // 2
-                else data2.reshape(1, -1)
-            ),
-            axis=1,
-        )
-    )
+    # Calculate frame size (half second)
+    frame_size1 = sr1 // 2
+    frame_size2 = sr2 // 2
     
-    rms1_tensor = torch.from_numpy(rms1).unsqueeze(0)
-    rms2_tensor = torch.from_numpy(rms2).unsqueeze(0)
+    # Pad data to make it divisible by frame size
+    pad1 = (frame_size1 - (len(data1) % frame_size1)) % frame_size1
+    pad2 = (frame_size2 - (len(data2) % frame_size2)) % frame_size2
+    
+    data1_padded = np.pad(data1, (0, pad1), mode='constant') if pad1 > 0 else data1
+    data2_padded = np.pad(data2, (0, pad2), mode='constant') if pad2 > 0 else data2
+    
+    # Reshape and calculate RMS
+    rms1 = np.sqrt(np.mean(np.square(data1_padded.reshape(-1, frame_size1)), axis=1))
+    rms2 = np.sqrt(np.mean(np.square(data2_padded.reshape(-1, frame_size2)), axis=1))
+    
+    # Convert to tensors and interpolate to match output length
+    rms1_tensor = torch.from_numpy(rms1).unsqueeze(0).unsqueeze(0)
+    rms2_tensor = torch.from_numpy(rms2).unsqueeze(0).unsqueeze(0)
     
     rms1_interp = F.interpolate(
-        rms1_tensor.unsqueeze(0), size=data2.shape[0], mode="linear", align_corners=False
+        rms1_tensor, size=len(data2), mode="linear", align_corners=False
     ).squeeze()
     rms2_interp = F.interpolate(
-        rms2_tensor.unsqueeze(0), size=data2.shape[0], mode="linear", align_corners=False
+        rms2_tensor, size=len(data2), mode="linear", align_corners=False
     ).squeeze()
     
-    rms2_interp = torch.max(rms2_interp, torch.zeros_like(rms2_interp) + 1e-6)
+    # Avoid division by zero
+    rms2_interp = torch.max(rms2_interp, torch.ones_like(rms2_interp) * 1e-6)
     
+    # Apply RMS mixing
     data2_tensor = torch.from_numpy(data2)
     data2_tensor *= (
-        torch.pow(rms1_interp, torch.tensor(1 - rate))
-        * torch.pow(rms2_interp, torch.tensor(rate - 1))
+        torch.pow(rms1_interp, 1 - rate)
+        * torch.pow(rms2_interp, rate - 1)
     )
     
     return data2_tensor.numpy().astype(np.float32)
@@ -311,7 +308,7 @@ def inference(
     # Apply high-pass filter
     logger.info("Applying high-pass filter...")
     audio_16k = resample_audio(audio, orig_sr=sample_rate, target_sr=16000)
-    audio_16k = signal.filtfilt(bh, ah, audio_16k)
+    audio_16k = signal.filtfilt(bh, ah, audio_16k).copy()  # Make contiguous copy
     
     # Pad audio
     t_pad = sr * x_pad
@@ -360,18 +357,27 @@ def inference(
             feats0.permute(0, 2, 1), scale_factor=2
         ).permute(0, 2, 1)
     
-    # Adjust feature length to match f0
-    if feats_tensor.shape[1] < p_len:
-        p_len = feats_tensor.shape[1]
-        f0 = f0[:p_len]
-        f0nsf = f0nsf[:p_len]
+    # Adjust lengths to match - features should match p_len
+    feat_len = feats_tensor.shape[1]
+    if feat_len < p_len:
+        p_len = feat_len
+    
+    # Ensure F0 matches feature length
+    f0 = f0[:p_len]
+    f0nsf = f0nsf[:p_len]
     
     # Convert to tensors
     f0_tensor = torch.from_numpy(f0).unsqueeze(0).float().to(device)
     f0nsf_tensor = torch.from_numpy(f0nsf).unsqueeze(0).long().to(device)
     
+    # Trim features to match F0 length if needed
+    if feats_tensor.shape[1] > p_len:
+        feats_tensor = feats_tensor[:, :p_len, :]
+        if protect < 0.5 and 'feats0' in locals():
+            feats0 = feats0[:, :p_len, :]
+    
     # Apply consonant protection
-    if protect < 0.5 and 'feats0' in locals() and feats0.shape == feats_tensor.shape:
+    if protect < 0.5 and 'feats0' in locals():
         # Create protection mask based on F0 (voiced/unvoiced)
         pitchff = f0_tensor.clone()
         pitchff[f0_tensor > 0] = 1
@@ -390,8 +396,8 @@ def inference(
         o, _, _ = net_g.infer(
             phone=feats_tensor,
             phone_lengths=p_len_tensor,
-            pitch=f0_tensor,
-            nsff0=f0nsf_tensor,
+            pitch=f0nsf_tensor,  # Coarse F0 for embedding lookup
+            nsff0=f0_tensor,     # Fine F0 for NSF
             sid=sid_tensor,
         )
         # o shape: [batch, 1, time]

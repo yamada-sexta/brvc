@@ -103,7 +103,7 @@ def train_model(
     filter_length: int = 2048,
     eps: float = 1e-9,
     betas: tuple = (0.8, 0.99),
-    save_every_epoch: int = 10,
+    save_every_epoch: Optional[int] = None,
     log_interval: int = 200,
     pretrain_g: Optional[Path] = None,
     pretrain_d: Optional[Path] = None,
@@ -359,7 +359,7 @@ def train_model(
         scheduler_d.step()
 
         # Save checkpoint
-        if epoch % save_every_epoch == 0:
+        if save_every_epoch is not None and epoch % save_every_epoch == 0:
             logger.info(f"Saving checkpoint for epoch {epoch}")
             save_checkpoint(
                 accelerator,
