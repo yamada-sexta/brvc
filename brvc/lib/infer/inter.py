@@ -141,7 +141,8 @@ def interface_cli(
     device = accelerator.device
 
     logger.info(f"Loading audio from {audio}...")
-    audio_data = load_audio(audio, resample_rate=sample_rate)
+    # Load at 16kHz for processing, will be upsampled to target SR later
+    audio_data = load_audio(audio, resample_rate=16000)
 
     logger.info("Loading synthesis model...")
 
@@ -198,9 +199,10 @@ def interface_cli(
     # Ensure output directory exists
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save output audio
-    logger.info(f"Saving output to {output}...")
-    sf.write(output, audio_out, sample_rate if resample_sr == 0 else resample_sr)
+    # Save output audio at the target sample rate
+    output_sr = resample_sr if resample_sr != 0 else sample_rate
+    logger.info(f"Saving output to {output} at {output_sr}Hz...")
+    sf.write(output, audio_out, output_sr)
 
     logger.info("Inference complete!")
     return output
@@ -336,7 +338,7 @@ def inference(
     resample_sr: int = 48000,
     # Pipeline config constants
     tgt_sr: int = 48000,
-    window: int = 160,
+    window: int = 160,  # hop_length for 16kHz (should match sr // 100)
     x_pad: int = 1,
     x_query: int = 6,
     x_center: int = 38,
@@ -446,17 +448,21 @@ def inference(
     if rms_mix_rate != 1:
         audio_out = change_rms(
             data1=audio,
-            sr1=sample_rate,
+            sr1=sr,  # Input is at 16kHz
             data2=audio_opt_array,
-            sr2=sample_rate,
+            sr2=tgt_sr,  # Output is at 48kHz (model's native rate)
             rate=rms_mix_rate,
         )
     else:
         audio_out = audio_opt_array
-    # if tgt_sr != sample_rate: # WTF
-    #     audio_out = resample_audio(
-    #         audio=audio_out, orig_sr=sample_rate, target_sr=tgt_sr
-    #     )
+    
+    # Resample to target sample rate if different from model's output
+    if sample_rate != tgt_sr:
+        logger.info(f"Resampling output from {tgt_sr}Hz to {sample_rate}Hz...")
+        audio_out = resample_audio(
+            audio=audio_out, orig_sr=tgt_sr, target_sr=sample_rate
+        )
+    
     audio_max = np.abs(audio_out).max() / 0.99
     max_int16 = 32767
     if audio_max > 1.0:
