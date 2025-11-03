@@ -2,23 +2,21 @@ from pathlib import Path
 from typing import Optional, Union, List
 from numpy.typing import NDArray
 import resampy
-
-
 from lib.config.v2_config import default_config, ConfigV2
-from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.utils.audio import load_audio
 import numpy as np
 import logging
 import torch
 import torch.nn.functional as F
 from scipy import signal
-
+from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
     from accelerate import Accelerator
-logging.basicConfig(level=logging.INFO)
+    from fairseq.models.hubert.hubert import HubertModel
+
 logger = logging.getLogger(__name__)
 
 # High-pass filter for audio preprocessing
@@ -127,39 +125,13 @@ def interface_cli(
     audio: Path,
     output: Optional[Path] = None,
     sample_rate: int = 48000,
-    f0_up_key: int = 0,
+    f0_offset: int = 0,
     f0_method: str = "crepe",
     index_rate: float = 0.0,
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
     resample_sr: int = 0,
 ):
-    """
-    CLI interface for voice conversion inference.
-
-    Parameters
-    ----------
-    g_path : Path
-        Path to the generator model checkpoint
-    audio : Path
-        Path to input audio file
-    output : Optional[Path]
-        Path to save output audio (default: input_path + '_out.wav')
-    sample_rate : int
-        Target sample rate for processing (default: 48000)
-    f0_up_key : int
-        Pitch shift in semitones (default: 0)
-    f0_method : str
-        F0 extraction method: 'crepe', 'harvest', 'pm', 'rmvpe' (default: 'crepe')
-    index_rate : float
-        Feature index retrieval rate, 0.0-1.0 (default: 0.0, disabled)
-    protect : float
-        Protection for consonants, 0.0-0.5 (default: 0.33)
-    rms_mix_rate : float
-        RMS mixing rate with original audio, 0.0-1.0 (default: 0.25)
-    resample_sr : int
-        Final output sample rate, 0 to keep same as sample_rate (default: 0)
-    """
     from accelerate import Accelerator
     import torch
     import soundfile as sf
@@ -214,7 +186,7 @@ def interface_cli(
         audio=audio_data,
         sample_rate=sample_rate,
         accelerator=accelerator,
-        f0_up_key=f0_up_key,
+        f0_offset=f0_offset,
         f0_method=f0_method,
         index_rate=index_rate,
         protect=protect,
@@ -237,57 +209,135 @@ def interface_cli(
     return output
 
 
+from time import time
+
+
+def process_chunk(
+    hubert_model: "HubertModel",
+    net_g: "SynthesizerTrnMsNSFsid",
+    sid: int,
+    audio: NDArray[np.float32],
+    pitch: torch.Tensor,
+    pitchf: torch.Tensor,
+    times: List[float],
+    protect: float,
+    device: torch.device,
+    window: int = 160,
+    # big_npy:
+):
+    feats = torch.from_numpy(audio)
+    feats = feats.float()
+    if feats.dim() == 2:  # stereo audio
+        feats = feats.mean(-1)
+    # assert feats.dim() == 1, feats.dim(), "Input audio should be 1D."
+    assert feats.dim() == 1, "Input audio should be 1D."
+    feats = feats.view(1, -1)
+    feats = feats.to(device)
+    padding_mask = torch.BoolTensor(feats.shape).fill_(False).to(device)
+
+    inputs = {
+        "source": feats,
+        "padding_mask": padding_mask,
+        "output_layer": 12,
+    }
+
+    t0 = time()
+    with torch.no_grad():
+        logits = hubert_model.extract_features(**inputs)
+        feats: torch.Tensor = logits[0]
+
+    if protect < 0.5:
+        feats0 = feats.clone()
+    else:
+        feats0 = None
+
+    feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
+    if protect < 0.5 and feats0:
+        feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
+
+    t1 = time()
+
+    p_len = audio.shape[0] // window
+    if feats.shape[1] < p_len:
+        p_len = feats.shape[1]
+        pitch = pitch[:, :p_len]
+        pitchf = pitchf[:, :p_len]
+
+    if protect < 0.5 and feats0:
+        # Create protection mask based on F0 (voiced/unvoiced)
+        pitchff = pitch.clone()
+        pitchff[pitch > 0] = 1
+        pitchff[pitch < 1] = protect
+        pitchff = pitchff.unsqueeze(-1)
+
+        # Mix original and current features
+        feats = feats * pitchff + feats0 * (1 - pitchff)
+        feats = feats.to(feats0.dtype)
+    else:
+        pitchff = None
+
+    p_len = torch.tensor([p_len], device=device).long()
+    with torch.no_grad():
+        res = net_g.infer(
+            phone=feats,
+            phone_lengths=p_len,
+            pitch=pitch,
+            nsff0=pitchf,
+            sid=torch.tensor([sid], device=device).long(),
+        )
+
+        converted_audio: NDArray[np.float32] = res[0][0, 0].data.cpu().float().numpy()
+    
+    t2 = time()
+    # Run Garbage Collection
+    from gc import collect
+    collect()
+    # Empty CUDA Cache
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    times[0] += t1 - t0
+    times[1] += t2 - t1
+    return converted_audio
+    
+
+
 def inference(
-    net_g: SynthesizerTrnMsNSFsid,
+    net_g: "SynthesizerTrnMsNSFsid",
     audio: NDArray[np.float32],
     accelerator: "Accelerator",
     sample_rate: int = 48000,
-    f0_up_key: int = 0,
+    f0_offset: int = 0,
     f0_method: str = "crepe",
     index_rate: float = 0.0,
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
-    resample_sr: int = 48000,
+    sr: int = 16000,
+    # Pipeline config constants
+    tgt_sr: int = 48000,
+    window: int = 160,
+    x_pad: int = 1,
+    x_query: int = 6,
+    x_center: int = 38,
+    x_max: int = 41,
+    f0_min: int = 50,
+    f0_max: int = 1100,
 ) -> NDArray[np.float32]:
-    """
-    Perform voice conversion inference.
-
-    Parameters
-    ----------
-    net_g : SynthesizerTrnMsNSFsid
-        Generator model
-    audio : NDArray[np.float32]
-        Input audio data
-    accelerator : Accelerator
-        Accelerate device wrapper
-    sample_rate : int
-        Sample rate of input audio
-    f0_up_key : int
-        Pitch shift in semitones
-    f0_method : str
-        F0 extraction method
-    index_rate : float
-        Feature index retrieval rate (not currently used)
-    protect : float
-        Protection for consonants
-    rms_mix_rate : float
-        RMS mixing rate
-    resample_sr : int
-        Final output sample rate
-
-    Returns
-    -------
-    NDArray[np.float32]
-        Converted audio
-    """
-    import torch
+    t_pad = sr * x_pad
+    t_pad_tgt = tgt_sr * x_pad
+    t_pad2 = t_pad * 2
+    t_query = sr * x_query
+    t_center = sr * x_center
+    t_max = sr * x_max
 
     device = accelerator.device
 
     # Constants from Pipeline class
-    sr = 16000  # HuBERT input sample rate
-    window = 512  # Hop length for HuBERT
-    x_pad = 1  # Padding in seconds
+    # sr = 16000  # HuBERT input sample rate
+    # window: int = 160
+    # x_pad = 1  # Padding in seconds
+    # f0_min = 50
+    # f0_max = 1100
+    t_pad = sample_rate * x_pad
 
     # Store original audio for RMS mixing
     original_audio = audio.copy()
@@ -300,9 +350,7 @@ def inference(
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import load_hubert_model
 
-    hubert_model, _ = load_hubert_model(
-        model_path=Path("assets/hubert/hubert_base.pt"), accelerator=accelerator
-    )
+    hubert_model, _ = load_hubert_model(accelerator=accelerator)
 
     if isinstance(audio, Path):
         logger.info(f"Loading audio from {audio}...")
@@ -322,10 +370,10 @@ def inference(
     f0 = f0_extractor.compute_f0(audio_16k, p_len=p_len)
 
     # Apply pitch shift
-    if f0_up_key != 0:
-        f0 *= pow(2, f0_up_key / 12)
+    if f0_offset != 0:
+        f0 *= pow(2, f0_offset / 12)
 
-    f0nsf = f0_extractor.coarse_f0(f0)
+    f0_coarse = f0_extractor.coarse_f0(f0)
 
     logger.info("Extracting HuBERT features...")
     wav_tensor = torch.from_numpy(audio_pad).unsqueeze(0).float().to(device)
@@ -340,25 +388,29 @@ def inference(
 
     with torch.no_grad():
         logits = hubert_model.extract_features(**inputs)
-        feats_tensor: torch.Tensor = logits[0]
+        feats: torch.Tensor = logits[0]
 
     # Check for NaNs
-    if torch.isnan(feats_tensor).any():
+    if torch.isnan(feats).any():
         logger.warning("Extracted features contain NaNs, which may lead to issues.")
 
     # Make feats0 bound to local scope
-    feats0 = feats_tensor.clone()
+    feats0 = feats.clone()
     # Store original features for protection
     if protect < 0.5:
-        feats0 = feats_tensor.clone()
+        feats0 = feats.clone()
 
     # Interpolate features (upscale by 2x)
-    feats_tensor = F.interpolate(feats_tensor.permute(0, 2, 1), scale_factor=2).permute(
+    feats_tensor = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(
         0, 2, 1
     )
 
-    if protect < 0.5 and "feats0" in locals():
+    if protect < 0.5:
         feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
+
+    p_len = audio.shape[1] // window
+    if feats.shape[1] < p_len:
+        p_len = feats.shape[1]
 
     # Adjust lengths to match - features should match p_len
     feat_len = feats_tensor.shape[1]
@@ -435,6 +487,8 @@ def inference(
 
 def main():
     from tap import tapify
+
+    logging.basicConfig(level=logging.INFO)
 
     tapify(interface_cli)
 
