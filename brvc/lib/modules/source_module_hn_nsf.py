@@ -26,10 +26,10 @@ class SourceModuleHnNSF(nn.Module):
     def __init__(
         self,
         sampling_rate,
-        harmonic_num: int,
-        sine_amp: float,
-        add_noise_std: float,
-        voiced_threshod: float,
+        harmonic_num: int = 0,
+        sine_amp: float = 0.1,
+        add_noise_std: float = 0.003,
+        voiced_threshod: float = 0,
         # is_half: bool,
     ):
         """
@@ -55,15 +55,8 @@ class SourceModuleHnNSF(nn.Module):
         # self.ddtype:int = -1
 
     def forward(self, x: torch.Tensor, upp: int = 1) -> tuple[torch.Tensor, None, None]:
-        # if self.ddtype ==-1:
-        #     self.ddtype = self.l_linear.weight.dtype
         sine_wavs, uv, _ = self.l_sin_gen(x, upp)
-        # print(x.dtype,sine_wavs.dtype,self.l_linear.weight.dtype)
-        # if self.is_half:
-        #     sine_wavs = sine_wavs.half()
-        # sine_merge = self.l_tanh(self.l_linear(sine_wavs.to(x)))
-        # print(sine_wavs.dtype,self.ddtype)
-        # if sine_wavs.dtype != self.l_linear.weight.dtype:
+        
         sine_wavs = sine_wavs.to(dtype=self.l_linear.weight.dtype)
         sine_merge = self.l_tanh(self.l_linear(sine_wavs))
         return sine_merge, None, None  # noise, uv
