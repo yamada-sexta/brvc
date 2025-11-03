@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 def create_muted_audio(sample_rate: int, length: Union[int, float] = 3) -> NDArray[np.float32]:
     """Create a muted audio segment."""
-    # return np.zeros(sample_rate * length, dtype=np.float32)
     return np.zeros(int(sample_rate * length), dtype=np.float32)
 
 def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[NDArray]:
@@ -29,7 +28,7 @@ def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[ND
 
 
 def save_audio(
-    audio: Optional[NDArray], sr: int, path: Path, resample_sr: Optional[int] = None
+    audio: Optional[NDArray[np.float32]], sr: int, path: Path, resample_sr: Optional[int] = None
 ) -> None:
     """Save audio at original or resampled rate."""
     if audio is None:
