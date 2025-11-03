@@ -58,17 +58,13 @@ class ResidualCouplingBlock(nn.Module):
 
     def remove_weight_norm(self) -> None:
         for i in range(self.n_flows):
-            m = self.flows[i * 2]
-            if hasattr(m, "remove_weight_norm") and callable(
-                getattr(m, "remove_weight_norm")
-            ):
-                m.remove_weight_norm()  # type: ignore
+            self.flows[i * 2].remove_weight_norm() # type: ignore
 
     def __prepare_scriptable__(self) -> "ResidualCouplingBlock":
         for i in range(self.n_flows):
             for hook in self.flows[i * 2]._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(self.flows[i * 2])
@@ -84,7 +80,7 @@ class ResidualCouplingLayer(nn.Module):
         kernel_size: int,
         dilation_rate: int,
         n_layers: int,
-        p_dropout: float = 0,
+        p_dropout: float = 0.0,
         gin_channels: int = 0,
         mean_only: bool = False,
     ):
@@ -104,14 +100,16 @@ class ResidualCouplingLayer(nn.Module):
             kernel_size,
             dilation_rate,
             n_layers,
-            p_dropout=float(p_dropout),
+            p_dropout=p_dropout,
             gin_channels=gin_channels,
         )
         self.post = nn.Conv1d(hidden_channels, self.half_channels * (2 - mean_only), 1)
         self.post.weight.data.zero_()
         if self.post.bias is not None:
             self.post.bias.data.zero_()
-
+        else:
+            raise ValueError("Bias of post conv1d is None.")
+        
     def forward(
         self,
         x: torch.Tensor,
@@ -145,7 +143,7 @@ class ResidualCouplingLayer(nn.Module):
     def __prepare_scriptable__(self) -> "ResidualCouplingLayer":
         for hook in self.enc._forward_pre_hooks.values():
             if (
-                hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                hook.__module__ == "torch.nn.utils.weight_norm"
                 and hook.__class__.__name__ == "WeightNorm"
             ):
                 torch.nn.utils.remove_weight_norm(self.enc)
