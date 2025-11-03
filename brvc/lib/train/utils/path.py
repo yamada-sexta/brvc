@@ -25,4 +25,3 @@ def load_wav_to_torch(full_path: Union[str, Path]) -> tuple[torch.FloatTensor, i
     full_path = str(full_path)
     sampling_rate, data = read(full_path)
     return torch.FloatTensor(data.astype(np.float32)), int(sampling_rate)
-

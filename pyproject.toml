@@ -23,20 +23,23 @@ dependencies = [
 [project.scripts]
 hello = "jurigged"
 
+# [tool.uv]
+# package = true
+
 
 [tool.uv.sources]
 fairseq = { git = "https://github.com/yamada-sexta/fairseq.git" }
-torch = [
-  { index = "pytorch-cu126", marker = "sys_platform == 'linux'"},
-  { index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
-]
+# torch = [
+#   { index = "pytorch-cu126", marker = "sys_platform == 'linux'"},
+#   { index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
+# ]
 
-[[tool.uv.index]]
-name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
-secondary = true
+# [[tool.uv.index]]
+# name = "pytorch-cu126"
+# url = "https://download.pytorch.org/whl/cu126"
+# secondary = true
 
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-secondary = true
+# [[tool.uv.index]]
+# name = "pytorch-cpu"
+# url = "https://download.pytorch.org/whl/cpu"
+# secondary = true

@@ -9,7 +9,6 @@ from numpy.typing import NDArray
 
 def load_audio(file: Union[str, Path], resample_rate: int) -> NDArray[np.float32]:
     """Load audio file using PyAV and resample to target sample rate."""
-    # try:
     audio_data: list[NDArray] = []
     with av.open(file, "r") as container:
         stream = next(s for s in container.streams if s.type == "audio")
@@ -37,6 +36,3 @@ def load_audio(file: Union[str, Path], resample_rate: int) -> NDArray[np.float32
     )
     return res
 
-
-# except Exception as e:
-# raise RuntimeError(f"Failed to load audio with PyAV: {e}") from e

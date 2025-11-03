@@ -8,6 +8,7 @@ import librosa
 from scipy import signal
 from scipy.io import wavfile
 from numpy.typing import NDArray
+from typing import Union
 from lib.utils.audio import load_audio
 from lib.utils.slicer import Slicer
 from pathlib import Path
@@ -97,12 +98,13 @@ def process_file(
 
 def preprocess_dataset(
     audio_dir: Path,
-    exp_dir: Path,
+    exp_dir: Optional[Path] = None,
     sample_rate: int = 48000,
     per: float = 3.7,
     overlap: float = 0.3,
     max_amp: float = 0.9,
     alpha: float = 0.75,
+    recursive: bool = False,
 ) -> None:
     """Main preprocessing pipeline.
 
@@ -124,6 +126,10 @@ def preprocess_dataset(
         Mixing factor for normalization.
     """
     logging.info("Starting preprocessing...")
+    
+    if exp_dir is None:
+        exp_dir = Path("experiments") / audio_dir.name
+        logging.info(f"No exp_dir provided. Using default: {exp_dir}")
 
     slicer = Slicer(
         sr=sample_rate,
@@ -143,15 +149,18 @@ def preprocess_dataset(
     wavs16k_dir = exp_dir / "1_16k_wavs"
     gt_wavs_dir.mkdir(parents=True, exist_ok=True)
     wavs16k_dir.mkdir(parents=True, exist_ok=True)
-    # gt_wavs_dir, wavs16k_dir = init_dirs(output_root)
-    # files = sorted(os.listdir(audio_dir))
-    files = audio_dir.glob("*.wav")
+    
+    audio_exts = {".wav", ".flac", ".mp3", ".ogg"}
+    if recursive:
+        files = [p for p in audio_dir.rglob("*") if p.suffix.lower() in audio_exts]
+    else:
+        files = [p for p in audio_dir.iterdir() if p.suffix.lower() in audio_exts]
+    
     files = sorted(files)
+    
     for idx, file in enumerate(
         tqdm(files, dynamic_ncols=True, desc="Processing audio files")
     ):
-        # path = audio_dir / fname
-
         process_file(
             path=file,
             idx=idx,
