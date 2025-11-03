@@ -42,9 +42,9 @@ class MultiHeadAttention(nn.Module):
         self.drop = nn.Dropout(p_dropout)
         
         if window_size is not None:
-            logger.info(
-                "MultiHeadAttention: window_size is set but not used in this wrapper."
-            )
+            # logger.info(
+            #     "MultiHeadAttention: window_size is set but not used in this wrapper."
+            # )
             n_heads_rel = 1 if heads_share else n_heads
             rel_stddev = self.k_channels**-0.5
             self.emb_rel_k = nn.Parameter(

@@ -1,4 +1,3 @@
-import logging
 import traceback
 from pathlib import Path
 from typing import List, Tuple
@@ -12,7 +11,6 @@ from accelerate.logging import get_logger
 from torch.utils.data import DataLoader, Dataset
 
 logger = get_logger(__name__)
-
 
 def mel_scale(f0: np.ndarray) -> np.ndarray:
     """Convert linear frequency (Hz) to Mel scale."""
@@ -84,10 +82,15 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx):
         return self.paths[idx]
 
-def extract_f0(exp_dir: Path, sample_rate: int = 48000) -> None:
-    accelerator = Accelerator()
+
+def extract_f0(
+    exp_dir: Path, 
+    sample_rate: int = 48000, 
+    accelerator: Accelerator = Accelerator()
+) -> None:
+    # accelerator = Accelerator()
     device = accelerator.device
-    logger.info(f"Using device: {device}", main_process_only=True)
+    # logger.info(f"Using device: {device}", main_process_only=True)
 
     paths = collect_audio_paths(exp_dir)
     dataset = AudioDataset(paths)
@@ -115,6 +118,9 @@ def extract_f0(exp_dir: Path, sample_rate: int = 48000) -> None:
 
 def main() -> None:
     from tap import tapify
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
 
     tapify(extract_f0)
 
