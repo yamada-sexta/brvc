@@ -93,10 +93,10 @@ def change_rms(
 
 
 def resample_audio(
-    audio: NDArray,
+    audio: NDArray[np.float32],
     orig_sr: int,
     target_sr: int,
-) -> NDArray:
+) -> NDArray[np.float32]:
     # Check if the audio is stereo and downmix to mono
     if audio.ndim > 1 and audio.shape[1] > 1:
         # print("Detected stereo audio, downmixing to mono.")
@@ -224,7 +224,7 @@ def process_chunk(
     device: torch.device,
     window: int = 160,
     # big_npy:
-):
+) -> NDArray[np.float32]:
     feats = torch.from_numpy(audio)
     feats = feats.float()
     if feats.dim() == 2:  # stereo audio
@@ -287,10 +287,11 @@ def process_chunk(
         )
 
         converted_audio: NDArray[np.float32] = res[0][0, 0].data.cpu().float().numpy()
-    
+
     t2 = time()
     # Run Garbage Collection
     from gc import collect
+
     collect()
     # Empty CUDA Cache
     if torch.cuda.is_available():
@@ -298,7 +299,27 @@ def process_chunk(
     times[0] += t1 - t0
     times[1] += t2 - t1
     return converted_audio
-    
+
+
+def get_f0(
+    accelerator: "Accelerator",
+    p_len: int,
+    sample_rate: int = 48000,
+    window: int = 160,
+    f0_min=50,
+    f0_max=1100,
+):
+    logger.info("Loading F0 extractor...")
+    device = accelerator.device
+    from lib.features.pitch.crepe import CRePE
+
+    f0_mel_min = 1127 * np.log1p(f0_min / 700)
+    f0_mel_max = 1127 * np.log1p(f0_max / 700)
+    f0_extractor = CRePE(device=device, sample_rate=sample_rate, hop_length=window)
+
+    f0 = f0_extractor.compute_f0(audio_16k)
+
+    pass
 
 
 def inference(
@@ -322,30 +343,17 @@ def inference(
     f0_min: int = 50,
     f0_max: int = 1100,
 ) -> NDArray[np.float32]:
-    t_pad = sr * x_pad
-    t_pad_tgt = tgt_sr * x_pad
-    t_pad2 = t_pad * 2
-    t_query = sr * x_query
-    t_center = sr * x_center
-    t_max = sr * x_max
-
     device = accelerator.device
 
-    # Constants from Pipeline class
-    # sr = 16000  # HuBERT input sample rate
-    # window: int = 160
-    # x_pad = 1  # Padding in seconds
-    # f0_min = 50
-    # f0_max = 1100
-    t_pad = sample_rate * x_pad
+    t_max = sr * x_max
 
-    # Store original audio for RMS mixing
-    original_audio = audio.copy()
-
-    logger.info("Loading F0 extractor...")
-    from lib.features.pitch.crepe import CRePE
-
-    f0_extractor = CRePE(device=device, sample_rate=sample_rate, hop_length=window)
+    audio = signal.filtfilt(bh, ah, audio).copy()  # Make contiguous copy
+    audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
+    opt_ts = []
+    if audio_pad.shape[0] < t_max:
+        audio_sum = np.zeros_like(audio)
+        for i in range(window):
+            audio_sum += audio_pad[i : i - window]
 
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import load_hubert_model
@@ -360,129 +368,6 @@ def inference(
     logger.info("Applying high-pass filter...")
     audio_16k = resample_audio(audio, orig_sr=sample_rate, target_sr=16000)
     audio_16k = signal.filtfilt(bh, ah, audio_16k).copy()  # Make contiguous copy
-
-    # Pad audio
-    t_pad = sr * x_pad
-    audio_pad = np.pad(audio_16k, (t_pad, t_pad), mode="reflect")
-    p_len = audio_pad.shape[0] // window
-
-    logger.info("Extracting F0 and coarse F0...")
-    f0 = f0_extractor.compute_f0(audio_16k, p_len=p_len)
-
-    # Apply pitch shift
-    if f0_offset != 0:
-        f0 *= pow(2, f0_offset / 12)
-
-    f0_coarse = f0_extractor.coarse_f0(f0)
-
-    logger.info("Extracting HuBERT features...")
-    wav_tensor = torch.from_numpy(audio_pad).unsqueeze(0).float().to(device)
-
-    padding_mask = torch.BoolTensor(wav_tensor.shape).fill_(False).to(device)
-
-    inputs = {
-        "source": wav_tensor,
-        "padding_mask": padding_mask,
-        "output_layer": 12,
-    }
-
-    with torch.no_grad():
-        logits = hubert_model.extract_features(**inputs)
-        feats: torch.Tensor = logits[0]
-
-    # Check for NaNs
-    if torch.isnan(feats).any():
-        logger.warning("Extracted features contain NaNs, which may lead to issues.")
-
-    # Make feats0 bound to local scope
-    feats0 = feats.clone()
-    # Store original features for protection
-    if protect < 0.5:
-        feats0 = feats.clone()
-
-    # Interpolate features (upscale by 2x)
-    feats_tensor = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(
-        0, 2, 1
-    )
-
-    if protect < 0.5:
-        feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
-
-    p_len = audio.shape[1] // window
-    if feats.shape[1] < p_len:
-        p_len = feats.shape[1]
-
-    # Adjust lengths to match - features should match p_len
-    feat_len = feats_tensor.shape[1]
-    if feat_len < p_len:
-        p_len = feat_len
-
-    # Ensure F0 matches feature length
-    f0 = f0[:p_len]
-    f0nsf = f0nsf[:p_len]
-
-    # Convert to tensors
-    f0_tensor = torch.from_numpy(f0).unsqueeze(0).float().to(device)
-    f0nsf_tensor = torch.from_numpy(f0nsf).unsqueeze(0).long().to(device)
-
-    # Trim features to match F0 length if needed
-    if feats_tensor.shape[1] > p_len:
-        feats_tensor = feats_tensor[:, :p_len, :]
-        if protect < 0.5 and "feats0" in locals():
-            feats0 = feats0[:, :p_len, :]
-
-    # Apply consonant protection
-    if protect < 0.5 and "feats0" in locals():
-        # Create protection mask based on F0 (voiced/unvoiced)
-        pitchff = f0_tensor.clone()
-        pitchff[f0_tensor > 0] = 1
-        pitchff[f0_tensor < 1] = protect
-        pitchff = pitchff.unsqueeze(-1)
-
-        # Mix original and current features
-        feats_tensor = feats_tensor * pitchff + feats0 * (1 - pitchff)
-        feats_tensor = feats_tensor.to(feats0.dtype)
-
-    logger.info("Running synthesis...")
-    p_len_tensor = torch.tensor([p_len], device=device).long()
-    sid_tensor = torch.tensor([0], device=device).long()
-
-    with torch.no_grad():
-        o, _, _ = net_g.infer(
-            phone=feats_tensor,
-            phone_lengths=p_len_tensor,
-            pitch=f0nsf_tensor,  # Coarse F0 for embedding lookup
-            nsff0=f0_tensor,  # Fine F0 for NSF
-            sid=sid_tensor,
-        )
-        # o shape: [batch, 1, time]
-        audio_out = o[0, 0].data.cpu().float().numpy()
-
-    # Remove padding from output
-    t_pad_tgt = sample_rate * x_pad
-    if len(audio_out) > 2 * t_pad_tgt:
-        audio_out = audio_out[t_pad_tgt:-t_pad_tgt]
-
-    # Apply RMS mixing
-    if rms_mix_rate != 1:
-        logger.info("Applying RMS mixing...")
-        audio_out = change_rms(
-            original_audio, sample_rate, audio_out, sample_rate, rms_mix_rate
-        )
-
-    # Resample if needed
-    if resample_sr != sample_rate:
-        logger.info(f"Resampling from {sample_rate}Hz to {resample_sr}Hz...")
-        audio_out = resample_audio(
-            audio_out, orig_sr=sample_rate, target_sr=resample_sr
-        )
-
-    # Normalize
-    audio_max = np.abs(audio_out).max() / 0.99
-    if audio_max > 1:
-        audio_out = audio_out / audio_max
-
-    return audio_out
 
 
 def main():
