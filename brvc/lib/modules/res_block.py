@@ -14,66 +14,66 @@ from lib.utils.padding import get_padding
 RES_BLOCK_VERSION = Literal["1", "2"]
 
 
-# class ResBlock2(torch.nn.Module):
-#     def __init__(
-#         self,
-#         channels: int,
-#         kernel_size: int = 3,
-#         dilation: tuple[int, int] = (1, 3),
-#         lrelu_slope: float = 0.1,
-#     ):
-#         super(ResBlock2, self).__init__()
-#         self.convs = nn.ModuleList(
-#             [
-#                 weight_norm(
-#                     Conv1d(
-#                         channels,
-#                         channels,
-#                         kernel_size,
-#                         1,
-#                         dilation=dilation[0],
-#                         padding=get_padding(kernel_size, dilation[0]),
-#                     )
-#                 ),
-#                 weight_norm(
-#                     Conv1d(
-#                         channels,
-#                         channels,
-#                         kernel_size,
-#                         1,
-#                         dilation=dilation[1],
-#                         padding=get_padding(kernel_size, dilation[1]),
-#                     )
-#                 ),
-#             ]
-#         )
-#         self.convs.apply(init_weights)
-#         self.lrelu_slope = lrelu_slope
+class ResBlock2(torch.nn.Module):
+    def __init__(
+        self,
+        channels: int,
+        kernel_size: int = 3,
+        dilation: tuple[int, int] = (1, 3),
+        lrelu_slope: float = 0.1,
+    ):
+        super(ResBlock2, self).__init__()
+        self.convs = nn.ModuleList(
+            [
+                weight_norm(
+                    Conv1d(
+                        channels,
+                        channels,
+                        kernel_size,
+                        1,
+                        dilation=dilation[0],
+                        padding=get_padding(kernel_size, dilation[0]),
+                    )
+                ),
+                weight_norm(
+                    Conv1d(
+                        channels,
+                        channels,
+                        kernel_size,
+                        1,
+                        dilation=dilation[1],
+                        padding=get_padding(kernel_size, dilation[1]),
+                    )
+                ),
+            ]
+        )
+        self.convs.apply(init_weights)
+        self.lrelu_slope = lrelu_slope
 
-#     def forward(self, x, x_mask: Optional[torch.Tensor] = None):
-#         for c in self.convs:
-#             xt = F.leaky_relu(x, self.lrelu_slope)
-#             if x_mask is not None:
-#                 xt = xt * x_mask
-#             xt = c(xt)
-#             x = xt + x
-#         if x_mask is not None:
-#             x = x * x_mask
-#         return x
+    def forward(self, x: torch.Tensor, x_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        for c in self.convs:
+            xt = F.leaky_relu(x, self.lrelu_slope)
+            if x_mask is not None:
+                xt = xt * x_mask
+            xt = c(xt)
+            x = xt + x
+        if x_mask is not None:
+            x = x * x_mask
+        return x
 
-#     def remove_weight_norm(self):
-#         for l in self.convs:
-#             remove_weight_norm(l)
+    def remove_weight_norm(self) -> None:
+        for l in self.convs:
+            remove_weight_norm(l)
 
-#     def __prepare_scriptable__(self):
-#         for l in self.convs:
-#             for hook in l._forward_pre_hooks.values():
-#                 if (
-#                     hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
-#                     and hook.__class__.__name__ == "WeightNorm"
-#                 ):
-#                     torch.nn.utils.remove_weight_norm(l)
-#         return self
+    def __prepare_scriptable__(self) -> "ResBlock2":
+        for l in self.convs:
+            for hook in l._forward_pre_hooks.values():
+                if (
+                    hook.__module__ == "torch.nn.utils.weight_norm"
+                    and hook.__class__.__name__ == "WeightNorm"
+                ):
+                    torch.nn.utils.remove_weight_norm(l)
+        return self
 
 
 class ResBlock1(torch.nn.Module):
@@ -175,24 +175,24 @@ class ResBlock1(torch.nn.Module):
             x = x * x_mask
         return x
 
-    def remove_weight_norm(self) -> None:
+    def remove_weight_norm(self):
         for l in self.convs1:
             remove_weight_norm(l)
         for l in self.convs2:
             remove_weight_norm(l)
 
-    def __prepare_scriptable__(self) -> "ResBlock1":
+    def __prepare_scriptable__(self):
         for l in self.convs1:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)
         for l in self.convs2:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)
