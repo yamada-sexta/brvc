@@ -6,6 +6,7 @@ from lib.utils.misc import fused_add_tanh_sigmoid_multiply
 
 
 class WN(torch.nn.Module):
+    """WaveNet-like module."""
     def __init__(
         self,
         hidden_channels: int,
@@ -16,17 +17,17 @@ class WN(torch.nn.Module):
         p_dropout: float = 0.0,
     ):
         super(WN, self).__init__()
-        assert kernel_size % 2 == 1
+        assert kernel_size % 2 == 1, "Kernel size must be odd number."
         self.hidden_channels = hidden_channels
         self.kernel_size = (kernel_size,)
         self.dilation_rate = dilation_rate
         self.n_layers = n_layers
         self.gin_channels = gin_channels
-        self.p_dropout = float(p_dropout)
+        self.p_dropout = p_dropout
 
         self.in_layers = torch.nn.ModuleList()
         self.res_skip_layers = torch.nn.ModuleList()
-        self.drop = nn.Dropout(float(p_dropout))
+        self.drop = nn.Dropout(p_dropout)
 
         if gin_channels != 0:
             cond_layer = torch.nn.Conv1d(
@@ -100,21 +101,21 @@ class WN(torch.nn.Module):
         if self.gin_channels != 0:
             for hook in self.cond_layer._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(self.cond_layer)
         for l in self.in_layers:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)
         for l in self.res_skip_layers:
             for hook in l._forward_pre_hooks.values():
                 if (
-                    hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+                    hook.__module__ == "torch.nn.utils.weight_norm"
                     and hook.__class__.__name__ == "WeightNorm"
                 ):
                     torch.nn.utils.remove_weight_norm(l)
