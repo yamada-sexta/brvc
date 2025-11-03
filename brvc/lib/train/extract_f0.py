@@ -49,7 +49,7 @@ def extract_f0_pair(
     if opt_path1.exists() and opt_path2.exists():
         return
     try:
-        wav = load_audio(inp_path, sr=pitch_extractor.sampling_rate)
+        wav = load_audio(inp_path, resample_rate=pitch_extractor.sampling_rate)
         f0 = pitch_extractor.compute_f0(wav)
         np.save(opt_path2, f0, allow_pickle=False)
         np.save(opt_path1, coarse_f0(f0), allow_pickle=False)

@@ -58,13 +58,13 @@ def process_file(
     """Process a single audio file."""
     try:
         b, a = filter_coeffs
-        audio = load_audio(file=path, sr=sr)
+        audio = load_audio(file=path, resample_rate=sr)
 
         if audio is None:
             logging.error(f"Failed to load audio: {path}")
             return
 
-        audio: NDArray = signal.lfilter(b, a, audio)  # type: ignore
+        audio: NDArray[np.float32] = signal.lfilter(b, a, audio)
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):

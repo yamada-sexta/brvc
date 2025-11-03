@@ -167,7 +167,7 @@ def interface_cli(
     device = accelerator.device
 
     logger.info(f"Loading audio from {audio}...")
-    audio_data = load_audio(audio, sr=sample_rate)
+    audio_data = load_audio(audio, resample_rate=sample_rate)
 
     logger.info("Loading synthesis model...")
 
@@ -303,7 +303,7 @@ def inference(
 
     if isinstance(audio, Path):
         logger.info(f"Loading audio from {audio}...")
-        audio = load_audio(audio, sr=sample_rate)
+        audio = load_audio(audio, resample_rate=sample_rate)
 
     # Apply high-pass filter
     logger.info("Applying high-pass filter...")
