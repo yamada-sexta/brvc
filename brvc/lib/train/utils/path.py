@@ -21,7 +21,8 @@ def line_to_tuple(line: str, split="|") -> tuple[str, str, str, str, str]:
     return parts[0], parts[1], parts[2], parts[3], parts[4]
 
 
-def load_wav_to_torch(full_path: str) -> tuple[torch.Tensor, int]:
+def load_wav_to_torch(full_path: Union[str, Path]) -> tuple[torch.FloatTensor, int]:
+    full_path = str(full_path)
     sampling_rate, data = read(full_path)
     return torch.FloatTensor(data.astype(np.float32)), int(sampling_rate)
 
