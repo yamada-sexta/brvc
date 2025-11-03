@@ -15,18 +15,18 @@ class FFN(nn.Module):
         causal: bool = False,
     ) -> None:
         super(FFN, self).__init__()
-        self.in_channels: int = in_channels
-        self.out_channels: int = out_channels
-        self.filter_channels: int = filter_channels
-        self.kernel_size: int = kernel_size
-        self.p_dropout: float = p_dropout
-        self.activation: Optional[str] = activation
-        self.causal: bool = causal
-        self.is_activation: bool = True if activation == "gelu" else False
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.filter_channels = filter_channels
+        self.kernel_size = kernel_size
+        self.p_dropout = p_dropout
+        self.activation = activation
+        self.causal = causal
+        self.is_activation = True if activation == "gelu" else False
 
-        self.conv_1: nn.Conv1d = nn.Conv1d(in_channels, filter_channels, kernel_size)
-        self.conv_2: nn.Conv1d = nn.Conv1d(filter_channels, out_channels, kernel_size)
-        self.drop: nn.Dropout = nn.Dropout(p_dropout)
+        self.conv_1 = nn.Conv1d(in_channels, filter_channels, kernel_size)
+        self.conv_2 = nn.Conv1d(filter_channels, out_channels, kernel_size)
+        self.drop = nn.Dropout(p_dropout)
 
     def padding(self, x: torch.Tensor, x_mask: torch.Tensor) -> torch.Tensor:
         if self.causal:

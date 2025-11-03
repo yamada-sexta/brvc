@@ -24,7 +24,7 @@ class Encoder(nn.Module):
         self.hidden_channels = hidden_channels
         self.filter_channels = filter_channels
         self.n_heads = n_heads
-        self.n_layers = int(n_layers)
+        self.n_layers = n_layers
         self.kernel_size = kernel_size
         self.p_dropout = p_dropout
         self.window_size = window_size
@@ -65,15 +65,9 @@ class Encoder(nn.Module):
         for attn_layers, norm_layers_1, ffn_layers, norm_layers_2 in zippep:
             y = attn_layers(x, x, attn_mask)
             y = self.drop(y)
-            # LayerNorm expects the normalized dimension to be the last one.
-            # Inputs are [batch, channels, time] so transpose to [batch, time, channels],
-            # apply LayerNorm (which was created with normalized_shape=hidden_channels),
-            # then transpose back.
-            x = (norm_layers_1((x + y).transpose(1, 2)).transpose(1, 2))
-
+            x = norm_layers_1(x + y)
             y = ffn_layers(x, x_mask)
             y = self.drop(y)
-            x = (norm_layers_2((x + y).transpose(1, 2)).transpose(1, 2))
+            x = norm_layers_2(x + y)
         x = x * x_mask
         return x
-
