@@ -98,7 +98,8 @@ class GeneratorNSF(nn.Module):
             ):
                 self.resblocks.append(
                     res_block(
-                        channels=ch, kernel_size=k, dilation=d, lrelu_slope=lrelu_slope
+                        channels=ch, kernel_size=k, dilation=d, # type: ignore
+                        lrelu_slope=lrelu_slope
                     )
                 )
 
@@ -126,7 +127,7 @@ class GeneratorNSF(nn.Module):
             x = x + self.cond(g)
         
         for i in range(self.num_upsamples):
-            x = F.leaky_relu(x, modules.LRELU_SLOPE)
+            x = F.leaky_relu(x, self.lrelu_slope)
             x = self.ups[i](x)
             x_source = self.noise_convs[i](har_source)
             x = x + x_source
@@ -150,4 +151,7 @@ class GeneratorNSF(nn.Module):
         for l in self.ups:
             remove_weight_norm(l)
         for l in self.resblocks:
-            l.remove_weight_norm()
+            if isinstance(l, torch.Tensor):
+                continue
+            else:
+                l.remove_weight_norm() # type: ignore

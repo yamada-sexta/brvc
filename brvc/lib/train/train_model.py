@@ -9,11 +9,13 @@ from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from accelerate.logging import get_logger
 
 from lib.train.loss import discriminator_loss, feature_loss, generator_loss, kl_loss
+from lib.train.utils.collect import TextAudioCollateMultiNSFsid
+from lib.train.utils.dataset import TextAudioLoaderMultiNSFsid
 from lib.train.utils.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
 from lib.train.utils.save_final import save_final
 from lib.utils.misc import clip_grad_value_
 from lib.utils.slice import slice_segments
-
+import shutil
 import torch.nn.functional as F
 
 logger = get_logger(__name__)
@@ -22,11 +24,11 @@ sys.path.append(os.path.join(now_dir))
 import torch
 from accelerate import Accelerator
 
-from lib.train.utils.data import TextAudioCollateMultiNSFsid, TextAudioLoaderMultiNSFsid
+# from lib.train.utils.data import TextAudioCollateMultiNSFsid, TextAudioLoaderMultiNSFsid
 from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
-from lib.config.v2_config import default_config
+from lib.config.v2_config import ConfigV2, default_config
 
 
 def save_checkpoint(
@@ -90,7 +92,7 @@ def load_pretrained(
 def train_model(
     train_files: Union[Path, List[Tuple[str, str, str, str, str]]],
     exp_dir: Path,
-    epochs: int = 20000,
+    epochs: int = 200,
     # batch_size: int = 4,
     learning_rate: float = 1e-4,
     lr_decay: float = 0.999875,
@@ -150,26 +152,26 @@ def train_model(
 
     # Models
     m = default_config["model"]
+    M = ConfigV2.Model
     net_g = SynthesizerTrnMsNSFsid(
         spec_channels=filter_length // 2 + 1,
-        segment_size=default_config["train"]["segment_size"] // hop_length,
-        inter_channels=m["inter_channels"],
-        hidden_channels=m["hidden_channels"],
-        filter_channels=m["filter_channels"],
-        n_heads=m["n_heads"],
-        n_layers=m["n_layers"],
-        kernel_size=m["kernel_size"],
-        p_dropout=m["p_dropout"],
-        resblock=m["resblock"],
-        resblock_kernel_sizes=m["resblock_kernel_sizes"],
-        resblock_dilation_sizes=m["resblock_dilation_sizes"],
-        upsample_rates=m["upsample_rates"],
-        upsample_initial_channel=m["upsample_initial_channel"],
-        upsample_kernel_sizes=m["upsample_kernel_sizes"],
-        spk_embed_dim=m["spk_embed_dim"],
-        gin_channels=m["gin_channels"],
-        sr=default_config["data"]["sampling_rate"],
-        # is_half=is_half,
+        segment_size=ConfigV2.Train.segment_size // hop_length,
+        inter_channels=M.inter_channels,
+        hidden_channels=M.hidden_channels,
+        filter_channels=M.filter_channels,
+        n_heads=M.n_heads,
+        n_layers=M.n_layers,
+        kernel_size=M.kernel_size,
+        p_dropout=M.p_dropout,
+        resblock=M.resblock,
+        resblock_kernel_sizes=M.resblock_kernel_sizes,
+        resblock_dilation_sizes=M.resblock_dilation_sizes,
+        upsample_rates=M.upsample_rates,
+        upsample_initial_channel=M.upsample_initial_channel,
+        upsample_kernel_sizes=M.upsample_kernel_sizes,
+        spk_embed_dim=M.spk_embed_dim,
+        gin_channels=M.gin_channels,
+        sr=sample_rate,
         lrelu_slope=0.1,
         txt_channels=768,
     )
@@ -216,29 +218,56 @@ def train_model(
             pretrain_d = None
             
     if pretrain_g == "base":
-        pretrain_g = Path("assets/pretrained/v2/generator.pth")
+        pretrain_g = Path("assets/pretrained_v2/f0G48k.pth")
         # Check if file exists
         if not pretrain_g.exists():
-            logger.warning(f"Pretrained generator not found at {pretrain_g}. Skipping load.")
-            pretrain_g = None
+            from huggingface_hub import hf_hub_download
+            logger.warning(f"Pretrained generator not found at {pretrain_g}. Downloading...")
+            # Download f0G48k.pth from the VoiceConversionWebUI repo
+            # https://huggingface.co/lj1995/VoiceConversionWebUI/tree/main/pretrained_v2
+            downloaded_model_path = hf_hub_download(
+                repo_id="lj1995/VoiceConversionWebUI",
+                filename="pretrained_v2/f0G48k.pth",
+                repo_type="model",
+            )
+            logger.info(f"Downloaded model to {downloaded_model_path}", main_process_only=True)
+            # Move to local path for future use
+            os.makedirs(os.path.dirname(pretrain_g), exist_ok=True)
+            # Copy to local path for future use
+            shutil.copy(downloaded_model_path, pretrain_g)
+            # Delete the downloaded file
+            os.remove(downloaded_model_path)
+            pretrain_g = pretrain_g
+            logger.info(f"Moved model to {pretrain_g}", main_process_only=True)
+            
     if pretrain_d == "base":
-        pretrain_d = Path("assets/pretrained/v2/discriminator.pth")
+        pretrain_d = Path("assets/pretrained_v2/f0D48k.pth")
         # Check if file exists
         if not pretrain_d.exists():
-            logger.warning(f"Pretrained discriminator not found at {pretrain_d}. Skipping load.")
-            pretrain_d = None
+            logger.warning(f"Pretrained discriminator not found at {pretrain_d}. Downloading...")
+            from huggingface_hub import hf_hub_download
+            # Download f0D48k.pth from the VoiceConversionWebUI repo
+            downloaded_model_path = hf_hub_download(
+                repo_id="lj1995/VoiceConversionWebUI",
+                filename="pretrained_v2/f0D48k.pth",
+                repo_type="model",
+            )
+            logger.info(f"Downloaded model to {downloaded_model_path}", main_process_only=True)
+            # Move to local path for future use
+            os.makedirs(os.path.dirname(pretrain_d), exist_ok=True)
+            shutil.copy(downloaded_model_path, pretrain_d)
+            pretrain_d = pretrain_d
+            logger.info(f"Copied model to {pretrain_d}", main_process_only=True)
+            # Delete the downloaded file
+            os.remove(downloaded_model_path)
     # Load pretrained
     if pretrain_g is not None:
-        if pretrain_g == "last":
-            # Find latest checkpoint
-            ckpt_g = sorted(exp_dir.glob("G_*.pth"))
-            if len(ckpt_g) > 0:
-                pretrain_g = ckpt_g[-1]
-            else:
-                pretrain_g = None
+        logger.info(f"Loading generator pretrained from {pretrain_g}", main_process_only=True)
         load_pretrained(net_g, str(pretrain_g), accelerator)
     if pretrain_d is not None:
+        logger.info(f"Loading discriminator pretrained from {pretrain_d}", main_process_only=True)
         load_pretrained(net_d, str(pretrain_d), accelerator)
+    
     # Training loop
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
@@ -252,7 +281,7 @@ def train_model(
         progress_bar = tqdm(
             train_loader,
             disable=not accelerator.is_main_process,
-            desc=f"Epoch {epoch}/{epochs} loss_g: {loss_g:.4f} loss_d: {loss_d:.4f}",
+            desc=f"Epoch {epoch}/{epochs}",
         )
 
         for batch_idx, batch in enumerate(progress_bar):
@@ -450,6 +479,13 @@ def train_model(
 
 def main():
     from tap import tapify
+    # setup logging
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
 
     tapify(train_model)
 

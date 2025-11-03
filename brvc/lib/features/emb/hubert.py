@@ -33,10 +33,10 @@ def load_hubert_model(
         logger.info(f"Downloaded model to {downloaded_model_path}")
         # Copy to local path for future use
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        # shutil.copy(downloaded_model_path, model_path)
-        # mv
-        shutil.move(downloaded_model_path, model_path)
-        logger.info(f"Moved model to {model_path}")
+        shutil.copy(downloaded_model_path, model_path)
+        logger.info(f"Copied model to {model_path}")
+        # Remove the downloaded file
+        os.remove(downloaded_model_path)
     import fairseq
     from fairseq.data.dictionary import Dictionary
     from fairseq import checkpoint_utils

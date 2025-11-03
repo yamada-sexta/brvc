@@ -1,30 +1,13 @@
 from typing import Optional, Tuple
 import torch
 import torch.nn as nn
-from torch.nn import MultiheadAttention as PyTorchMultiheadAttention
-
+# from torch.nn import MultiheadAttention as PyTorchMultiheadAttention
+import math
 from accelerate.logging import get_logger
 logger = get_logger(__name__)
+import torch.nn.functional as F
 
 class MultiHeadAttention(nn.Module):
-    """
-    Wrapper around PyTorch's MultiheadAttention with Conv1d projections.
-    
-    Maintains backward compatibility with the original custom implementation
-    while leveraging PyTorch's optimized MultiheadAttention layer.
-    
-    Args:
-        channels: Input channel dimension
-        out_channels: Output channel dimension
-        n_heads: Number of attention heads
-        p_dropout: Dropout probability (default: 0.0)
-        window_size: Window size for relative attention (not used in wrapper, for backward compatibility)
-        heads_share: Whether heads share relative embeddings (not used, for backward compatibility)
-        block_length: Block length for local attention (not used, for backward compatibility)
-        proximal_bias: Add proximal bias (not used, for backward compatibility)
-        proximal_init: Initialize K from Q weights (default: False)
-    """
-    
     def __init__(
         self,
         channels: int,
@@ -58,15 +41,6 @@ class MultiHeadAttention(nn.Module):
         self.conv_o = nn.Conv1d(channels, out_channels, 1)
         self.drop = nn.Dropout(p_dropout)
         
-        # PyTorch's optimized MultiheadAttention
-        self.mha = PyTorchMultiheadAttention(
-            embed_dim=channels,
-            num_heads=n_heads,
-            dropout=p_dropout,
-            bias=True,
-            batch_first=False,  # We'll use (seq_len, batch, embed_dim) format
-        )
-        
         if window_size is not None:
             logger.info(
                 "MultiHeadAttention: window_size is set but not used in this wrapper."
@@ -90,7 +64,8 @@ class MultiHeadAttention(nn.Module):
         if proximal_init:
             with torch.no_grad():
                 self.conv_k.weight.copy_(self.conv_q.weight)
-                self.conv_k.bias.copy_(self.conv_q.bias)
+                if self.conv_k.bias and self.conv_q.bias:
+                    self.conv_k.bias.copy_(self.conv_q.bias)
                 
     def forward(
         self, 
@@ -184,6 +159,8 @@ class MultiHeadAttention(nn.Module):
         return ret
 
     def _get_relative_embeddings(self, relative_embeddings: torch.Tensor, length: int) -> torch.Tensor:
+        if self.window_size is None:
+            raise ValueError("window_size must be set for relative embeddings.")
         max_relative_position = 2 * self.window_size + 1
         # Pad first before slice to avoid using cond ops.
         pad_length: int = max(length - (self.window_size + 1), 0)

@@ -45,7 +45,9 @@ default_config = {
     },
 }
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from lib.modules.res_block import RES_BLOCK_VERSION
 
 class ConfigV2:
     class Train:
@@ -80,7 +82,7 @@ class ConfigV2:
         n_layers: int = 6
         kernel_size: int = 3
         p_dropout: int = 0
-        resblock: str = "1"
+        resblock: "RES_BLOCK_VERSION" = "1"
         resblock_kernel_sizes: list = [3, 7, 11]
         resblock_dilation_sizes: list = [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
         upsample_rates: list = [12, 10, 2, 2]
