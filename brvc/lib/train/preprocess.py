@@ -14,6 +14,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+def create_muted_audio(sample_rate: int, length: Union[int, float] = 3) -> NDArray[np.float32]:
+    """Create a muted audio segment."""
+    # return np.zeros(sample_rate * length, dtype=np.float32)
+    return np.zeros(int(sample_rate * length), dtype=np.float32)
 
 def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[NDArray]:
     """Normalize audio amplitude."""
@@ -162,6 +166,11 @@ def preprocess_dataset(
             max_amp=max_amp,
             alpha=alpha,
         )
+    
+    # Save a muted audio segment for padding or other uses
+    muted = create_muted_audio(sample_rate, length=per)
+    save_audio(muted, sample_rate, gt_wavs_dir / "muted.wav")
+    save_audio(muted, sample_rate, wavs16k_dir / "muted.wav", resample_sr=16000)
 
     logging.info("Finished preprocessing!")
 
