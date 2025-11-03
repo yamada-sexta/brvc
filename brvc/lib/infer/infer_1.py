@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from scipy import signal
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
