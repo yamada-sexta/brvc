@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import Literal, Optional, Union, List
 from numpy.typing import NDArray
 import resampy
 from lib.config.v2_config import default_config, ConfigV2
@@ -126,11 +126,10 @@ def interface_cli(
     output: Optional[Path] = None,
     sample_rate: int = 48000,
     f0_offset: int = 0,
-    f0_method: str = "crepe",
-    index_rate: float = 0.0,
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
     resample_sr: int = 0,
+    load_mode: Literal["rvc","train"] = "train"
 ):
     from accelerate import Accelerator
     import torch
@@ -178,7 +177,13 @@ def interface_cli(
     )
 
     cpt = torch.load(g_path, map_location="cpu")
-    net_g.load_state_dict(cpt["model"])
+    if load_mode == "rvc":
+        del net_g.enc_q
+        net_g.load_state_dict(cpt["weight"])
+    elif load_mode == "train":
+        net_g.load_state_dict(cpt["model"])
+    else:
+        raise ValueError(f"Invalid load_mode: {load_mode}. Choose 'rvc' or 'train'.")
     net_g.eval()
     net_g.to(device)
 
@@ -440,7 +445,7 @@ def inference(
             protect=protect,
             device=device,
             window=window,
-        )[t_pad_tgt:-t_pad_tgt] # TODO: understand this shit
+        )[t_pad_tgt:-t_pad_tgt]
     )
 
     audio_opt_array = np.concatenate(audio_opt, axis=0)
