@@ -1,4 +1,3 @@
-import os
 import traceback
 import logging
 from typing import List, Optional
@@ -19,7 +18,7 @@ def create_muted_audio(sample_rate: int, length: Union[int, float] = 3) -> NDArr
     """Create a muted audio segment."""
     return np.zeros(int(sample_rate * length), dtype=np.float32)
 
-def normalize_audio(audio: NDArray, max_amp: float, alpha: float) -> Optional[NDArray]:
+def normalize_audio(audio: NDArray[np.float32], max_amp: float, alpha: float) -> Optional[NDArray[np.float32]]:
     """Normalize audio amplitude."""
     tmp_max = np.abs(audio).max()
     if tmp_max > 2.5:
@@ -62,10 +61,12 @@ def process_file(
         audio = load_audio(file=path, resample_rate=sr)
 
         if audio is None:
-            logging.error(f"Failed to load audio: {path}")
+            logger.error(f"Failed to load audio: {path}")
             return
 
-        audio: NDArray[np.float32] = np.float32(signal.lfilter(b, a, audio))
+        # audio: NDArray[np.float32] = signal.lfilter(b, a, audio)
+        # Use numpy's lfilter to avoid type issues
+        audio: NDArray[np.float32] = np.asarray(signal.lfilter(b, a, audio), dtype=np.float32)
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):
@@ -90,10 +91,10 @@ def process_file(
                         save_audio(norm_audio, sr, wavs16k_dir / basename, 16000)
                     break
 
-        logging.info(f"Processed: {path}")
+        logger.debug(f"Processed: {path}")
 
     except Exception:
-        logging.error(f"Failed to process {path}\n{traceback.format_exc()}")
+        logger.error(f"Failed to process {path}\n{traceback.format_exc()}")
 
 
 def preprocess_dataset(
@@ -105,6 +106,7 @@ def preprocess_dataset(
     max_amp: float = 0.9,
     alpha: float = 0.75,
     recursive: bool = False,
+    # log_level: str = "INFO",
 ) -> None:
     """Main preprocessing pipeline.
 
@@ -124,12 +126,14 @@ def preprocess_dataset(
         Max amplitude for normalization.
     alpha : float, optional
         Mixing factor for normalization.
+    recursive : bool, optional
+        Whether to search audio files recursively.
     """
-    logging.info("Starting preprocessing...")
+    logger.info("Starting preprocessing...")
     
     if exp_dir is None:
         exp_dir = Path("experiments") / audio_dir.name
-        logging.info(f"No exp_dir provided. Using default: {exp_dir}")
+        logger.info(f"No exp_dir provided. Using default: {exp_dir}")
 
     slicer = Slicer(
         sr=sample_rate,
@@ -180,10 +184,13 @@ def preprocess_dataset(
     save_audio(muted, sample_rate, gt_wavs_dir / "muted.wav")
     save_audio(muted, sample_rate, wavs16k_dir / "muted.wav", resample_sr=16000)
 
-    logging.info("Finished preprocessing!")
+    logger.info("Finished preprocessing!")
 
 
 if __name__ == "__main__":
     from tap import tapify
-
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
     tapify(preprocess_dataset)

@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 from accelerate.utils import set_seed
 from tqdm import tqdm
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
 from lib.config.v2_config import default_config
+
 
 def save_checkpoint(
     accelerator: Accelerator,
@@ -105,8 +106,8 @@ def train_model(
     betas: tuple = (0.8, 0.99),
     save_every_epoch: Optional[int] = None,
     log_interval: int = 200,
-    pretrain_g: Optional[Path] = None,
-    pretrain_d: Optional[Path] = None,
+    pretrain_g: Union[Path, Literal["base"], Literal["last"], None] = "base",
+    pretrain_d: Union[Path, Literal["base"], Literal["last"], None] = "base",
     # is_half: bool = False,
 ):
     """Main training function."""
@@ -159,7 +160,7 @@ def train_model(
         n_layers=m["n_layers"],
         kernel_size=m["kernel_size"],
         p_dropout=m["p_dropout"],
-        resblock_version=m["resblock"],
+        resblock=m["resblock"],
         resblock_kernel_sizes=m["resblock_kernel_sizes"],
         resblock_dilation_sizes=m["resblock_dilation_sizes"],
         upsample_rates=m["upsample_rates"],
@@ -201,10 +202,42 @@ def train_model(
         )
     )
 
+    if pretrain_g == "last":
+        ckpt_g = sorted(exp_dir.glob("G_*.pth"))
+        if len(ckpt_g) > 0:
+            pretrain_g = ckpt_g[-1]
+        else:
+            pretrain_g = None
+    if pretrain_d == "last":
+        ckpt_d = sorted(exp_dir.glob("D_*.pth"))
+        if len(ckpt_d) > 0:
+            pretrain_d = ckpt_d[-1]
+        else:
+            pretrain_d = None
+            
+    if pretrain_g == "base":
+        pretrain_g = Path("assets/pretrained/v2/generator.pth")
+        # Check if file exists
+        if not pretrain_g.exists():
+            logger.warning(f"Pretrained generator not found at {pretrain_g}. Skipping load.")
+            pretrain_g = None
+    if pretrain_d == "base":
+        pretrain_d = Path("assets/pretrained/v2/discriminator.pth")
+        # Check if file exists
+        if not pretrain_d.exists():
+            logger.warning(f"Pretrained discriminator not found at {pretrain_d}. Skipping load.")
+            pretrain_d = None
     # Load pretrained
-    if pretrain_g:
+    if pretrain_g is not None:
+        if pretrain_g == "last":
+            # Find latest checkpoint
+            ckpt_g = sorted(exp_dir.glob("G_*.pth"))
+            if len(ckpt_g) > 0:
+                pretrain_g = ckpt_g[-1]
+            else:
+                pretrain_g = None
         load_pretrained(net_g, str(pretrain_g), accelerator)
-    if pretrain_d:
+    if pretrain_d is not None:
         load_pretrained(net_d, str(pretrain_d), accelerator)
     # Training loop
     global_step = 0
@@ -212,7 +245,7 @@ def train_model(
     for epoch in range(1, epochs + 1):
         net_g.train()
         net_d.train()
-        
+
         loss_g = torch.tensor(0.0)
         loss_d = torch.tensor(0.0)
 
@@ -301,11 +334,11 @@ def train_model(
 
             optim_g.zero_grad()
             accelerator.backward(loss_gen_all)
-            
+
             grad_norm_g = clip_grad_value_(net_g.parameters(), None)
             optim_g.step()
             global_step += 1
-            
+
             # loss_g = loss_gen_all.detach().cpu()
             # loss_d = loss_disc.detach().cpu()
 

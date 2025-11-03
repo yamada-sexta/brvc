@@ -17,8 +17,8 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 
 from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from fairseq.models.hubert.hubert import HubertModel
+
+from lib.features.emb.hubert import load_hubert_model
 
 
 logger = get_logger(__name__)
@@ -35,52 +35,6 @@ def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
         with torch.no_grad():
             feats = F.layer_norm(feats, feats.shape)
     return feats.view(1, -1)
-
-
-
-def load_hubert_model(
-    model_path: Path, accelerator: Accelerator
-) -> tuple["HubertModel", DictConfig]:
-    from huggingface_hub import hf_hub_download
-    from fairseq.models.hubert.hubert import HubertModel
-    """Load and prepare the HuBERT model."""
-    if not model_path.exists():
-        logging.info(f"{model_path} not found. Downloading from Hugging Face...")
-
-        # Download hubert_base.pt from the VoiceConversionWebUI repo
-        downloaded_model_path = hf_hub_download(
-            repo_id="lj1995/VoiceConversionWebUI",
-            filename="hubert_base.pt",
-            repo_type="model",  # optional but good practice
-        )
-
-        logging.info(f"Downloaded model to {downloaded_model_path}")
-        # Copy to local path for future use
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        shutil.copy(downloaded_model_path, model_path)
-    import fairseq
-    from fairseq.data.dictionary import Dictionary
-    from fairseq import checkpoint_utils
-    from torch.serialization import safe_globals
-
-    models: list[HubertModel] = []
-    with safe_globals([Dictionary]):
-        models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
-            [str(model_path)]
-        )
-        if saved_cfg is None:
-            raise ValueError("Could not find model configuration.")
-
-    model = models[0]
-    model.eval()
-
-    # Move to accelerator device, handle fp16 automatically
-    model = accelerator.prepare(model)
-    if accelerator.mixed_precision == "fp16":
-        model = model.half()
-
-    logger.info(f"Model loaded and prepared on device(s): {accelerator.device}")
-    return model, saved_cfg
 
 
 def extract_feature(
@@ -118,8 +72,8 @@ def extract_features(
     exp_dir: Path,
     # output_dir: Path,
     version: Literal["v1", "v2"] = "v2",
-    is_half: bool = False,
-    model_path: Path = Path("assets/hubert/hubert_base.pt"),
+    # is_half: bool = False,
+    # model_path: Path = Path("assets/hubert/hubert_base.pt"),
 ):
     """
     Extract features from audio files using a pre-trained HuBERT model.
@@ -137,10 +91,10 @@ def extract_features(
         Path to the HuBERT model checkpoint, by default "assets/hubert/hubert_base.pt".
     """
     # Initialize accelerator for multi-GPU, mixed precision, etc.
-    accelerator = Accelerator(mixed_precision="fp16" if is_half else "no")
+    accelerator = Accelerator()
     logger.info(f"Using device: {accelerator.device}")
 
-    model, saved_cfg = load_hubert_model(model_path, accelerator)
+    model, saved_cfg = load_hubert_model(accelerator)
 
     wav_dir = exp_dir / "1_16k_wavs"
     # out_dir = Path(output_dir)
@@ -174,6 +128,11 @@ def extract_features(
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
     # args = FeatureExtractArgs().parse_args()
     # main(args)
     from tap import tapify
