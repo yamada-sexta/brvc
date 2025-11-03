@@ -10,11 +10,11 @@ def mel_scale(f0: np.ndarray) -> np.ndarray:
     return 1127 * np.log1p(f0 / 700)
 
 def coarse_f0(
-    f0: np.ndarray,
+    f0: NDArray[np.float32],
     f0_bin: int = 256,
     f0_min: float = 50.0,
     f0_max: float = 1100.0,
-) -> np.ndarray:
+) -> NDArray[np.int32]:
     """Quantize continuous F0 into discrete coarse Mel bins."""
     f0_mel = mel_scale(f0)
     f0_mel_min = mel_scale(np.array([f0_min]))[0]

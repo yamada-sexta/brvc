@@ -187,11 +187,8 @@ def interface_cli(
         sample_rate=sample_rate,
         accelerator=accelerator,
         f0_offset=f0_offset,
-        f0_method=f0_method,
-        index_rate=index_rate,
         protect=protect,
         rms_mix_rate=rms_mix_rate,
-        resample_sr=resample_sr if resample_sr > 0 else sample_rate,
     )
 
     # Determine output path
@@ -215,7 +212,8 @@ from time import time
 def process_chunk(
     hubert_model: "HubertModel",
     net_g: "SynthesizerTrnMsNSFsid",
-    sid: int,
+    # sid: int,
+    sid: torch.Tensor,
     audio: NDArray[np.float32],
     pitch: torch.Tensor,
     pitchf: torch.Tensor,
@@ -252,7 +250,7 @@ def process_chunk(
         feats0 = None
 
     feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
-    if protect < 0.5 and feats0:
+    if protect < 0.5 and feats0 is not None:
         feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
 
     t1 = time()
@@ -263,7 +261,7 @@ def process_chunk(
         pitch = pitch[:, :p_len]
         pitchf = pitchf[:, :p_len]
 
-    if protect < 0.5 and feats0:
+    if protect < 0.5 and feats0 is not None:
         # Create protection mask based on F0 (voiced/unvoiced)
         pitchff = pitch.clone()
         pitchff[pitch > 0] = 1
@@ -303,23 +301,27 @@ def process_chunk(
 
 def get_f0(
     accelerator: "Accelerator",
+    x: np.ndarray,
     p_len: int,
-    sample_rate: int = 48000,
+    f0_up_key: int,
+    # inp_f0: Optional[np.ndarray] = None,
+    sample_rate: int = 16000,
     window: int = 160,
-    f0_min=50,
-    f0_max=1100,
-):
+    f0_min: int = 50,
+    f0_max: int = 1100,
+) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
     logger.info("Loading F0 extractor...")
     device = accelerator.device
     from lib.features.pitch.crepe import CRePE
 
-    f0_mel_min = 1127 * np.log1p(f0_min / 700)
-    f0_mel_max = 1127 * np.log1p(f0_max / 700)
+    # f0_mel_min = 1127 * np.log1p(f0_min / 700)
+    # f0_mel_max = 1127 * np.log1p(f0_max / 700)
     f0_extractor = CRePE(device=device, sample_rate=sample_rate, hop_length=window)
 
-    f0 = f0_extractor.compute_f0(audio_16k)
-
-    pass
+    f0 = f0_extractor.compute_f0(x, p_len=p_len)
+    f0 *= 2 ** (f0_up_key / 12)
+    f0_course = f0_extractor.coarse_f0(f0)
+    return f0_course, f0
 
 
 def inference(
@@ -328,11 +330,10 @@ def inference(
     accelerator: "Accelerator",
     sample_rate: int = 48000,
     f0_offset: int = 0,
-    f0_method: str = "crepe",
-    index_rate: float = 0.0,
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
     sr: int = 16000,
+    resample_sr: int = 48000,
     # Pipeline config constants
     tgt_sr: int = 48000,
     window: int = 160,
@@ -342,32 +343,131 @@ def inference(
     x_max: int = 41,
     f0_min: int = 50,
     f0_max: int = 1100,
-) -> NDArray[np.float32]:
-    device = accelerator.device
-
-    t_max = sr * x_max
-
-    audio = signal.filtfilt(bh, ah, audio).copy()  # Make contiguous copy
-    audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
-    opt_ts = []
-    if audio_pad.shape[0] < t_max:
-        audio_sum = np.zeros_like(audio)
-        for i in range(window):
-            audio_sum += audio_pad[i : i - window]
+    times: List[float] = [0.0, 0.0, 0.0],
+) -> NDArray[np.int16]:
 
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import load_hubert_model
 
     hubert_model, _ = load_hubert_model(accelerator=accelerator)
 
-    if isinstance(audio, Path):
-        logger.info(f"Loading audio from {audio}...")
-        audio = load_audio(audio, resample_rate=sample_rate)
+    logger.info("Starting inference pipeline...")
+    device = accelerator.device
+    t_pad = sr * x_pad
+    t_pad_tgt = tgt_sr * x_pad
+    t_pad2 = t_pad * 2
+    t_query = sr * x_query
+    t_center = sr * x_center
+    t_max = sr * x_max
 
-    # Apply high-pass filter
-    logger.info("Applying high-pass filter...")
-    audio_16k = resample_audio(audio, orig_sr=sample_rate, target_sr=16000)
-    audio_16k = signal.filtfilt(bh, ah, audio_16k).copy()  # Make contiguous copy
+    audio = signal.filtfilt(bh, ah, audio)
+    audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
+    opt_ts: list[int] = []
+    if audio_pad.shape[0] < t_max:
+        audio_sum = np.zeros_like(audio)
+        for i in range(window):
+            audio_sum += audio_pad[i : i - window]
+        for t in range(t_center, audio.shape[0], t_center):
+            n = (
+                t
+                - t_query
+                + np.where(
+                    audio_sum[t - t_query : t + t_query]
+                    == audio_sum[t - t_query : t + t_query].min()
+                )[0][0]
+            )
+            opt_ts.append(n)
+    s = 0
+    audio_opt: List[NDArray[np.float32]] = []
+    t = None
+    t1 = time()
+    audio_pad = np.pad(audio, (t_pad, t_pad), mode="reflect")
+    p_len = audio_pad.shape[0] // window
+    # sid = torch.tensor([0], device=device).long().item()
+
+    pitch, pitchf = get_f0(
+        accelerator=accelerator,
+        p_len=p_len,
+        x=audio_pad,
+        f0_up_key=f0_offset,
+        sample_rate=sr,
+    )
+    pitch = pitch[:p_len]
+    pitchf = pitchf[:p_len]
+
+    pitch = torch.from_numpy(pitch).unsqueeze(0).to(device).long()
+    pitchf = torch.from_numpy(pitchf).unsqueeze(0).to(device).float()
+
+    t2 = time()
+    times[1] += t2 - t1
+
+    total_segments = len(opt_ts) + 1
+    sid = torch.tensor([0], device=device).long()
+    for i, t in enumerate(opt_ts):
+        logger.info(f"Processing segment {i + 1}/{total_segments}...")
+        t = t // window * window
+        audio_opt.append(
+            process_chunk(
+                hubert_model=hubert_model,
+                net_g=net_g,
+                sid=sid,
+                audio=audio_pad[s : t + t_pad2 + window],
+                pitch=pitch[:, s // window : (t + t_pad2) // window],
+                pitchf=pitchf[:, s // window : (t + t_pad2) // window],
+                times=times,
+                protect=protect,
+                device=device,
+                window=window,
+            )[t_pad_tgt:-t_pad_tgt]
+        )
+        s = t
+        
+    # if t is None:
+        # logger.info(f"Processing single segment {total_segments}/{total_segments}...")
+        # t = 0
+    logger.info(f"Processing final segment {total_segments}/{total_segments}...")
+    audio_opt.append(
+        process_chunk(
+            hubert_model=hubert_model,
+            net_g=net_g,
+            sid=sid,
+            audio=audio_pad[t:],
+            pitch=pitch[:, t // window :] if t is not None else pitch,
+            pitchf=pitchf[:, t // window :] if t is not None else pitchf,
+            times=times,
+            protect=protect,
+            device=device,
+            window=window,
+        )[t_pad_tgt:-t_pad_tgt] # TODO: understand this shit
+    )
+
+    audio_opt_array = np.concatenate(audio_opt, axis=0)
+    
+    if rms_mix_rate != 1:
+        audio_out = change_rms(
+            data1=audio,
+            sr1=sample_rate,
+            data2=audio_opt_array,
+            sr2=sample_rate,
+            rate=rms_mix_rate,
+        )
+    else:
+        audio_out = audio_opt_array
+    # if tgt_sr != sample_rate: # WTF
+    #     audio_out = resample_audio(
+    #         audio=audio_out, orig_sr=sample_rate, target_sr=tgt_sr
+    #     )
+    audio_max = np.abs(audio_out).max() / 0.99
+    max_int16 = 32767
+    if audio_max > 1.0:
+        max_int16 /= audio_max
+    audio_int: NDArray[np.int16] = (audio_out * max_int16).astype(np.int16)
+    # Do GC
+    from gc import collect
+    collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return audio_int
 
 
 def main():
