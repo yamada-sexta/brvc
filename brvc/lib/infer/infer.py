@@ -223,6 +223,12 @@ def interface_cli(
     # Determine output path
     if output is None:
         output = audio.parent / f"{audio.stem}_out.wav"
+        # Make sure we don't overwrite existing files
+        count = 1
+        while output.exists():
+            output = audio.parent / f"{audio.stem}_out_{count}.wav"
+            count += 1
+    logger.info(f"Saving output audio to {output}...")
 
     # Ensure output directory exists
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -354,17 +360,14 @@ def get_f0(
     sr: int = 16000,
 ) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
     logger.info("Loading F0 extractor...")
-    device = accelerator.device
-    from lib.features.pitch.crepe import CRePE
-
-    debug_info = {
-        "p_len": p_len,
-        "f0_up_key": f0_up_key,
-        "window": window,
-        "f0_min": f0_min,
-        "f0_max": f0_max,
-    }
-    print(f"F0 Extraction Debug Info: {json.dumps(debug_info, indent=2)}")
+    # debug_info = {
+    #     "p_len": p_len,
+    #     "f0_up_key": f0_up_key,
+    #     "window": window,
+    #     "f0_min": f0_min,
+    #     "f0_max": f0_max,
+    # }
+    # print(f"F0 Extraction Debug Info: {json.dumps(debug_info, indent=2)}")
     from lib.features.pitch.swift import Swift
     f0_extractor = Swift(
         # sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
