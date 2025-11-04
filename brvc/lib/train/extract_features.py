@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 from lib.features.emb.hubert import get_hf_hubert_model
 from safetensors.torch import save_file
 
+from lib.train.config import HUBERT_DIR, RESAMPLED_16K_DIR
+
 
 logger = get_logger(__name__)
 
@@ -56,8 +58,8 @@ def extract_features(
     model, extractor = get_hf_hubert_model()
     model.eval()
     model.to(accelerator.device)
-    wav_dir = exp_dir / "1_16k_wavs"
-    out_dir = exp_dir / f"3_feature768"
+    wav_dir = exp_dir / RESAMPLED_16K_DIR
+    out_dir = exp_dir / HUBERT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     wav_files = sorted(wav_dir.glob("*.wav"))
     if not wav_files:

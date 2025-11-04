@@ -6,11 +6,13 @@ import torch
 from tqdm import tqdm
 from lib.features.pitch.crepe import CRePE
 from lib.features.pitch.pitch_predictor import PitchExtractor
+from lib.train.config import F0_DIR, RESAMPLED_16K_DIR
 from lib.utils.audio import load_audio
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from torch.utils.data import DataLoader, Dataset
 from numba import njit
+from safetensors.torch import save_file
 
 logger = get_logger(__name__)
 
@@ -19,6 +21,7 @@ logger = get_logger(__name__)
 def mel_scale(f0: np.ndarray) -> np.ndarray:
     """Convert linear frequency (Hz) to Mel scale."""
     return 1127 * np.log1p(f0 / 700)
+
 
 @njit
 def coarse_f0(
@@ -44,47 +47,49 @@ def coarse_f0(
 @torch.no_grad()
 def extract_f0_pair(
     inp_path: Path,
-    opt_path1: Path,
-    opt_path2: Path,
+    output_path: Path,
     pitch_extractor: PitchExtractor,
 ) -> None:
-    """Extract F0 and coarse F0, and save them as .npy."""
-    if opt_path1.exists() and opt_path2.exists():
+    """Extract F0 and coarse F0, and save them."""
+    if output_path.exists():
+        logger.debug(f"F0 file {output_path} already exists, skipping.")
         return
     try:
         wav = load_audio(inp_path, resample_rate=pitch_extractor.sr)
         f0 = pitch_extractor.extract_pitch(wav)
-        np.save(opt_path2, f0, allow_pickle=False)
-        np.save(opt_path1, coarse_f0(f0), allow_pickle=False)
+        save_file(
+            {"f0": torch.from_numpy(f0), "coarse_f0": torch.from_numpy(coarse_f0(f0))},
+            output_path,
+        )
     except Exception as e:
         logger.error(f"F0 extraction failed for {inp_path}: {e}")
         logger.debug(traceback.format_exc())
 
 
-def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path, Path]]:
+def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path]]:
     """Collect all (input, coarse_output, fine_output) triplets."""
-    inp_root = exp_dir / "1_16k_wavs"
-    opt_root1 = exp_dir / "2a_f0"
-    opt_root2 = exp_dir / "2b-f0nsf"
+    in_dir = exp_dir / RESAMPLED_16K_DIR
+    out_dir = exp_dir / F0_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    res: List[Tuple[Path, Path]] = []
 
-    opt_root1.mkdir(parents=True, exist_ok=True)
-    opt_root2.mkdir(parents=True, exist_ok=True)
-
-    return [
-        (inp, opt_root1 / f"{inp.stem}.npy", opt_root2 / f"{inp.stem}.npy")
-        for inp in sorted(inp_root.iterdir())
-        if inp.suffix.lower() in {".wav", ".flac", ".mp3"} and "spec" not in inp.name
-    ]
+    for f in sorted(in_dir.iterdir()):
+        if f.suffix.lower() == ".wav":
+            out_path = out_dir / f"{f.stem}.safetensors"
+            if not out_path.exists():
+                res.append((f, out_path))
+                logger.debug(f"Will process F0 for {f.name}")
+    return res
 
 
 class AudioDataset(Dataset):
-    def __init__(self, paths):
+    def __init__(self, paths: List[Tuple[Path, Path]]):
         self.paths = paths
 
     def __len__(self):
         return len(self.paths)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Tuple[Path, Path]:
         return self.paths[idx]
 
 
@@ -104,14 +109,14 @@ def extract_f0(exp_dir: Path, accelerator: Accelerator = Accelerator()) -> None:
         f"Processing {len(paths)} files using Swift ({device})", main_process_only=True
     )
 
-    for inp, opt1, opt2 in tqdm(
+    for i, o in tqdm(
         dataloader,
         disable=not accelerator.is_main_process,
         desc="Extracting F0",
         unit="file",
         dynamic_ncols=True,
     ):
-        extract_f0_pair(inp, opt1, opt2, pitch_extractor)
+        extract_f0_pair(i, o, pitch_extractor)
 
     accelerator.wait_for_everyone()
     logger.info("All F0 features extracted successfully.", main_process_only=True)
@@ -120,6 +125,7 @@ def extract_f0(exp_dir: Path, accelerator: Accelerator = Accelerator()) -> None:
 def main() -> None:
     from tap import tapify
     import logging
+
     logging.basicConfig(level=logging.INFO)
     tapify(extract_f0)
 

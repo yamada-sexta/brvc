@@ -1,5 +1,0 @@
-#!/usr/bin/env -S uv run --script
-
-import os
-
-os.system("uv run jurigged ./gr.py")

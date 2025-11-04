@@ -8,6 +8,7 @@ from scipy import signal
 from scipy.io import wavfile
 from numpy.typing import NDArray
 from typing import Union
+from lib.train.config import GT_DIR, RESAMPLED_16K_DIR
 from lib.utils.audio import load_audio
 from lib.utils.slicer import Slicer
 from pathlib import Path
@@ -167,8 +168,8 @@ def preprocess_dataset(
     else:
         raise ValueError("Unexpected result from signal.butter")
 
-    gt_wavs_dir = exp_dir / "0_gt_wavs"
-    wavs16k_dir = exp_dir / "1_16k_wavs"
+    gt_wavs_dir = exp_dir / GT_DIR
+    wavs16k_dir = exp_dir / RESAMPLED_16K_DIR
     gt_wavs_dir.mkdir(parents=True, exist_ok=True)
     wavs16k_dir.mkdir(parents=True, exist_ok=True)
 
