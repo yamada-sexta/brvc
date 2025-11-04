@@ -1,0 +1,2 @@
+format:
+	uvx ruff format
