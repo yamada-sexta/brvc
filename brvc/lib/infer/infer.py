@@ -28,6 +28,7 @@ if len(res) != 2:
     raise ValueError("High-pass filter coefficients should be a tuple of (b, a).")
 bh, ah = res
 
+
 def interface_cli(
     g_path: Path,
     audio: Path,
@@ -357,7 +358,6 @@ def inference(
     f0_max: int = 1100,
     times: List[float] = [0.0, 0.0, 0.0],
 ) -> NDArray[np.int16]:
-
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import get_hf_hubert_model
 

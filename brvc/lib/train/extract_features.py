@@ -87,9 +87,9 @@ def extract_features(
             extract_feature(file, out_file, model, extractor, accelerator)
         except Exception:
             logger.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
-    
+
     accelerator.wait_for_everyone()
-    
+
     logger.info("[DONE] Feature extraction completed successfully.")
 
 

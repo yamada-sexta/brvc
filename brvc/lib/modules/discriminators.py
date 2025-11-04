@@ -1,4 +1,3 @@
-from typing import Union
 import torch
 import torch.nn as nn
 
@@ -28,7 +27,9 @@ class MultiPeriodDiscriminatorV2(nn.Module):
         ]
         self.discriminators: nn.ModuleList = nn.ModuleList(discs)
 
-    def forward(self, y: torch.Tensor, y_hat: torch.Tensor) -> tuple[
+    def forward(
+        self, y: torch.Tensor, y_hat: torch.Tensor
+    ) -> tuple[
         list[torch.Tensor],
         list[torch.Tensor],
         list[list[torch.Tensor]],

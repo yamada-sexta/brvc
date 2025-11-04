@@ -6,6 +6,7 @@ from lib.modules.wn import WN
 from lib.utils.misc import sequence_mask
 from torch.nn.utils.parametrizations import weight_norm
 
+
 class PosteriorEncoder(nn.Module):
     def __init__(
         self,
@@ -39,9 +40,7 @@ class PosteriorEncoder(nn.Module):
     def forward(
         self, x: torch.Tensor, x_lengths: torch.Tensor, g: Optional[torch.Tensor] = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(
-            x.dtype
-        )
+        x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
         x = self.pre(x) * x_mask
         x = self.enc(x, x_mask, g=g)
         stats = self.proj(x) * x_mask

@@ -162,7 +162,9 @@ def preprocess_dataset(
         hop_size=15,
         max_sil_kept=500,
     )
-    res: tuple[NDArray, NDArray] = signal.butter(N=5, Wn=48, btype="high", fs=sample_rate)  # type: ignore
+    res: tuple[NDArray, NDArray] = signal.butter(
+        N=5, Wn=48, btype="high", fs=sample_rate
+    )  # type: ignore
     if isinstance(res, tuple) and len(res) == 2:
         b, a = res
     else:

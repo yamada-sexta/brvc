@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional, Tuple
 
+
 class Flip(nn.Module):
     # torch.jit.script() Compiled functions \
     # can't take variable number of arguments or \

@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import ConvTranspose1d, Conv1d
+
 # from torch.nn.utils import weight_norm, remove_weight_norm
 from torch.nn.utils.parametrizations import weight_norm
 from lib.modules.source_module_hn_nsf import SourceModuleHnNSF
@@ -97,7 +98,7 @@ class GeneratorNSF(nn.Module):
                     res_block(
                         channels=ch,
                         kernel_size=k,
-                        dilation=d, # type: ignore
+                        dilation=d,  # type: ignore
                         lrelu_slope=lrelu_slope,
                     )
                 )
@@ -151,11 +152,11 @@ class GeneratorNSF(nn.Module):
                 # If ignored, it will cause torch.jit.script() compilation errors
                 assert isinstance(xs, torch.Tensor)
                 x = xs / self.num_kernels
-                
+
         x = F.leaky_relu(x)
         x = self.conv_post(x)
         x = torch.tanh(x)
-        
+
         return x
 
     # def remove_weight_norm(self):

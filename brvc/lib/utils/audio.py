@@ -35,4 +35,3 @@ def load_audio(file: Union[str, Path], resample_rate: int) -> NDArray[np.float32
         np.concatenate(audio_data, axis=1).flatten().astype(np.float32)
     )
     return res
-

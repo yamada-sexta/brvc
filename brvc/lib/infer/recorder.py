@@ -1,4 +1,3 @@
-
 # A simple CLI recorder
 from pathlib import Path
 from typing import Optional

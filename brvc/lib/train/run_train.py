@@ -16,7 +16,6 @@ def run_training_cli(
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
 ):
-
     run_training(
         audio_dir=audio_dir,
         exp_dir=exp_dir,

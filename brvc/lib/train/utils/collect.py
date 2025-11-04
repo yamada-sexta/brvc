@@ -2,6 +2,7 @@ from typing import Tuple
 import torch
 from torch import FloatTensor, LongTensor
 
+
 class TextAudioCollateMultiNSFsid:
     """Zero-pads model inputs and targets"""
 
@@ -98,4 +99,3 @@ class TextAudioCollateMultiNSFsid:
             # dv
             sid,
         )
-

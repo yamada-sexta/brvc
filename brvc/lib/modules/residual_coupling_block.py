@@ -58,7 +58,7 @@ class ResidualCouplingBlock(nn.Module):
 
     def remove_weight_norm(self) -> None:
         for i in range(self.n_flows):
-            self.flows[i * 2].remove_weight_norm() # type: ignore
+            self.flows[i * 2].remove_weight_norm()  # type: ignore
 
     # def __prepare_scriptable__(self) -> "ResidualCouplingBlock":
     #     for i in range(self.n_flows):
@@ -109,7 +109,7 @@ class ResidualCouplingLayer(nn.Module):
             self.post.bias.data.zero_()
         else:
             raise ValueError("Bias of post conv1d is None.")
-        
+
     def forward(
         self,
         x: torch.Tensor,

@@ -1,12 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from torch.nn import LayerNorm
-from typing import Optional, Tuple
-import math
-
 from lib.modules.feed_forward import FeedForwardNetwork
 from lib.modules.multihead_attention import MultiHeadAttention
+
 
 class LayerNorm(nn.Module):
     def __init__(self, channels: int, eps: float = 1e-5):
@@ -21,6 +18,7 @@ class LayerNorm(nn.Module):
         x = x.transpose(1, -1)
         x = F.layer_norm(x, (self.channels,), self.gamma, self.beta, self.eps)
         return x.transpose(1, -1)
+
 
 class Encoder(nn.Module):
     def __init__(
@@ -69,7 +67,7 @@ class Encoder(nn.Module):
                 )
             )
             self.norm_layers_2.append(LayerNorm(hidden_channels))
-            
+
     def forward(self, x: torch.Tensor, x_mask: torch.Tensor) -> torch.Tensor:
         attn_mask = x_mask.unsqueeze(2) * x_mask.unsqueeze(-1)
         x = x * x_mask
@@ -86,4 +84,3 @@ class Encoder(nn.Module):
             x = norm_layers_2(x + y)
         x = x * x_mask
         return x
-

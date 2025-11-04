@@ -20,9 +20,7 @@ class CRePE(PitchExtractor):
         super().__init__()
         self.device = device
 
-    def extract_pitch(
-        self, audio: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
+    def extract_pitch(self, audio: NDArray[np.float32]) -> NDArray[np.float32]:
         model = "full"
         batch_size = 512
         audio_tensor = torch.tensor(np.copy(audio))[None].float()

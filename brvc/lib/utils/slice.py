@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 import torch
 
+
 def slice_segments2(
     x: torch.Tensor, ids_str: torch.Tensor, segment_size: int = 4
 ) -> torch.Tensor:
@@ -62,7 +63,9 @@ def slice_segments(
 
 
 def rand_slice_segments(
-    x: torch.Tensor, x_lengths: Optional[torch.Tensor | int] = None, segment_size: int = 4
+    x: torch.Tensor,
+    x_lengths: Optional[torch.Tensor | int] = None,
+    segment_size: int = 4,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Randomly sample fixed-length temporal segments from a batch.
 

@@ -34,6 +34,7 @@ from numpy.typing import NDArray
 import numpy as np
 import librosa
 
+
 # Removed torch imports
 def change_rms(
     data1: NDArray[np.float32],
@@ -46,11 +47,15 @@ def change_rms(
     Changes the RMS of data2 to be a weighted blend between the RMS of data1 and data2.
     This version uses only NumPy for interpolation and calculations.
     """
-    
-    # Calculate RMS for both signals. 
+
+    # Calculate RMS for both signals.
     # librosa.feature.rms returns shape (1, t), so we take [0] to get a 1D array.
-    rms1 = librosa.feature.rms(y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2)[0]
-    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)[0]
+    rms1 = librosa.feature.rms(y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2)[
+        0
+    ]
+    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)[
+        0
+    ]
 
     # Get the target length for interpolation (must match data2)
     target_len = data2.shape[0]
@@ -58,7 +63,7 @@ def change_rms(
     # Create the x-coordinates for the original RMS arrays
     xp1 = np.linspace(0, 1, num=rms1.shape[0])
     xp2 = np.linspace(0, 1, num=rms2.shape[0])
-    
+
     # Create the x-coordinates for the target interpolated array
     x_target = np.linspace(0, 1, num=target_len)
 

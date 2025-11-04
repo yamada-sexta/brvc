@@ -46,8 +46,10 @@ default_config = {
 }
 
 from typing import Optional, TYPE_CHECKING
+
 if TYPE_CHECKING:
     from lib.modules.res_block import RES_BLOCK_VERSION
+
 
 class ConfigV2:
     class Train:
@@ -65,6 +67,7 @@ class ConfigV2:
         warmup_epochs: int = 0
         c_mel: int = 45
         c_kl: float = 1.0
+
     class Data:
         max_wav_value: float = 32768.0
         sampling_rate: int = 48000
@@ -74,6 +77,7 @@ class ConfigV2:
         n_mel_channels: int = 128
         mel_fmin: float = 0.0
         mel_fmax: Optional[float] = None
+
     class Model:
         inter_channels: int = 192
         hidden_channels: int = 192

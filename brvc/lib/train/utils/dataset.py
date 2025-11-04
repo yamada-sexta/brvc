@@ -29,9 +29,9 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         max_text_len: int,  # e.g. 5000
         min_text_len: int,  # e.g. 1
     ):
-        assert all(
-            isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path
-        ), "audio_and_text_path must be a list of tuples with 3 elements each"
+        assert all(isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path), (
+            "audio_and_text_path must be a list of tuples with 3 elements each"
+        )
         self.audio_and_text_path = audio_and_text_path
         self.max_wav_value = max_wav_value
         self.sampling_rate = sampling_rate
@@ -63,7 +63,9 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
                     continue
                 n_frames = int(feats.shape[0])
             except Exception as e:
-                logger.warning(f"Failed to read phone safetensors {phone_path}: {e}\n{traceback.format_exc()}")
+                logger.warning(
+                    f"Failed to read phone safetensors {phone_path}: {e}\n{traceback.format_exc()}"
+                )
                 continue
 
             if self.min_text_len <= n_frames <= self.max_text_len:
@@ -138,6 +140,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
             pitch,
             pitchf,
         )
+
     def get_audio(self, filename: Path) -> tuple[torch.Tensor, torch.Tensor]:
         assert filename.suffix == ".wav", "Only .wav files are supported"
         audio_tensor = filename.with_suffix(".safetensors")
@@ -166,10 +169,14 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
             center=False,
         )
         spec = torch.squeeze(spec, 0)
-        safetensors.torch.save_file({"spec": spec.contiguous(), "audio": audio_norm.contiguous()}, audio_tensor)
+        safetensors.torch.save_file(
+            {"spec": spec.contiguous(), "audio": audio_norm.contiguous()}, audio_tensor
+        )
         return spec, audio_norm
 
-    def __getitem__(self, index: int) -> tuple[
+    def __getitem__(
+        self, index: int
+    ) -> tuple[
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,

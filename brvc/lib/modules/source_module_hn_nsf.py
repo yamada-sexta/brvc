@@ -55,7 +55,7 @@ class SourceModuleHnNSF(nn.Module):
 
     def forward(self, x: torch.Tensor, upp: int = 1) -> tuple[torch.Tensor, None, None]:
         sine_wavs, uv, _ = self.l_sin_gen(x, upp)
-        
+
         sine_wavs = sine_wavs.to(dtype=self.l_linear.weight.dtype)
         sine_merge = self.l_tanh(self.l_linear(sine_wavs))
         return sine_merge, None, None  # noise, uv

@@ -2,6 +2,7 @@ from typing_extensions import Literal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 # from torch.nn.utils import weight_norm, remove_weight_norm
 from torch.nn.utils.parametrizations import weight_norm
 from typing import Optional
@@ -51,7 +52,9 @@ class ResBlock2(torch.nn.Module):
         self.convs.apply(init_weights)
         self.lrelu_slope = lrelu_slope
 
-    def forward(self, x: torch.Tensor, x_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, x_mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         for c in self.convs:
             xt = F.leaky_relu(x, self.lrelu_slope)
             if x_mask is not None:

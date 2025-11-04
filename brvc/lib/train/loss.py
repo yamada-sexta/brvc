@@ -1,5 +1,6 @@
 import torch
 
+
 def discriminator_loss(
     disc_real_outputs: torch.Tensor, disc_generated_outputs: torch.Tensor
 ) -> tuple[torch.Tensor, list[float], list[float]]:
@@ -16,6 +17,7 @@ def discriminator_loss(
         g_losses.append(g_loss.item())
 
     return loss, r_losses, g_losses
+
 
 def kl_loss(
     z_p: torch.Tensor,

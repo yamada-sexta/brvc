@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+
 def process_audio(
     input_dir: Union[str, Path],
     output_dir: Union[str, Path],

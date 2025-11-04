@@ -57,7 +57,13 @@ MAPPING = {
 }
 
 
-def set_recursively(hf_pointer, key: str, value: torch.Tensor, full_name: str, weight_type: Optional[str]):
+def set_recursively(
+    hf_pointer,
+    key: str,
+    value: torch.Tensor,
+    full_name: str,
+    weight_type: Optional[str],
+):
     # 1. Navigate to the target module/tensor
     for attribute in key.split("."):
         hf_pointer = getattr(hf_pointer, attribute)
@@ -105,7 +111,10 @@ def set_recursively(hf_pointer, key: str, value: torch.Tensor, full_name: str, w
         f"{key + '.' + weight_type if weight_type is not None else ''} was initialized from {full_name}."
     )
 
+
 from fairseq.models.hubert.hubert import HubertModel as FairseqHubertModel
+
+
 def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: HubertModel):
     unused_weights = []
     fairseq_dict = fairseq_model.state_dict()
@@ -114,13 +123,13 @@ def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: Hubert
     for name, value in fairseq_dict.items():
         logger.info(f"Processing {name}...")
         is_used = False
-        
+
         # Skip training-specific weights that don't exist in the base HuBERT model
         if name in ["label_embs_concat", "final_proj.weight", "final_proj.bias"]:
             # logger.info(f"Skipping training-specific weight: {name}")
             unused_weights.append(name)
             continue
-        
+
         if "conv_layers" in name:
             load_conv_layer(
                 name,
@@ -137,7 +146,6 @@ def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: Hubert
                 #     if (is_finetuned and mapped_key != "lm_head")
                 #     else mapped_key
                 # )
-                
 
                 if key in name or (
                     key.split("w2v_model.")[-1] == name.split(".")[0]
@@ -247,7 +255,10 @@ def convert_hubert_checkpoint(
     Copy/paste/tweak model's weights to transformers design.
     """
     from fairseq import checkpoint_utils
-    model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task([checkpoint_path])
+
+    model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
+        [checkpoint_path]
+    )
     if saved_cfg is None:
         raise ValueError("Could not find model configuration.")
     if config_path is not None:
@@ -260,7 +271,7 @@ def convert_hubert_checkpoint(
             intermediate_size=saved_cfg.model.encoder_ffn_embed_dim,
             hidden_act=saved_cfg.model.activation_fn,
         )
-    
+
     hf_wav2vec = HubertModel(config)
     feature_extractor = Wav2Vec2FeatureExtractor(
         feature_size=1,
@@ -269,7 +280,7 @@ def convert_hubert_checkpoint(
         do_normalize=False,
         return_attention_mask=False,
     )
-    
+
     print("Saved cfg:")
     print(saved_cfg)
     model = model[0].eval()
@@ -278,6 +289,7 @@ def convert_hubert_checkpoint(
 
     hf_wav2vec.save_pretrained(pytorch_dump_folder_path)
     feature_extractor.save_pretrained(pytorch_dump_folder_path)
+
 
 from fairseq.data.dictionary import Dictionary
 from torch.serialization import safe_globals
@@ -291,7 +303,10 @@ if __name__ == "__main__":
         help="Path to the output PyTorch model.",
     )
     parser.add_argument(
-        "--checkpoint_path", default="assets/hubert/hubert_base.pt", type=str, help="Path to fairseq checkpoint"
+        "--checkpoint_path",
+        default="assets/hubert/hubert_base.pt",
+        type=str,
+        help="Path to fairseq checkpoint",
     )
     args = parser.parse_args()
     with safe_globals([Dictionary]):

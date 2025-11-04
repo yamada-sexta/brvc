@@ -61,7 +61,7 @@ class TextEncoder(nn.Module):
         x = torch.transpose(x, 1, -1)  # [b, h, t]
         x_mask = torch.unsqueeze(sequence_mask(lengths, x.size(2)), 1).to(x.dtype)
         x = self.encoder(x * x_mask, x_mask)
-        
+
         if skip_head is not None:
             assert isinstance(skip_head, torch.Tensor)
             head = int(skip_head.item())

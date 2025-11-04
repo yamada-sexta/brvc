@@ -2,6 +2,7 @@ from typing import Optional
 import torch
 from torch.utils.data import Sampler
 
+
 class BucketSampler(Sampler):
     """
     Maintain similar input lengths in a batch.
@@ -12,7 +13,13 @@ class BucketSampler(Sampler):
     Ex) boundaries = [b1, b2, b3] -> any x s.t. length(x) <= b1 or length(x) > b3 are discarded.
     """
 
-    def __init__(self, dataset: torch.utils.data.Dataset, batch_size: int, boundaries: list[int], shuffle: bool = True):
+    def __init__(
+        self,
+        dataset: torch.utils.data.Dataset,
+        batch_size: int,
+        boundaries: list[int],
+        shuffle: bool = True,
+    ):
         self.lengths = [len(item) for item in dataset]
         self.batch_size = batch_size
         self.boundaries = boundaries
@@ -70,7 +77,7 @@ class BucketSampler(Sampler):
 
             # batching
             for j in range(0, len(ids_bucket), self.batch_size):
-                batch = [bucket[idx] for idx in ids_bucket[j:j + self.batch_size]]
+                batch = [bucket[idx] for idx in ids_bucket[j : j + self.batch_size]]
                 batches.append(batch)
 
         if self.shuffle:

@@ -1,11 +1,14 @@
 from typing import Optional, Tuple
 import torch
 import torch.nn as nn
+
 # from torch.nn import MultiheadAttention as PyTorchMultiheadAttention
 import math
 from accelerate.logging import get_logger
+
 logger = get_logger(__name__)
 import torch.nn.functional as F
+
 
 class MultiHeadAttention(nn.Module):
     def __init__(
@@ -22,7 +25,7 @@ class MultiHeadAttention(nn.Module):
     ) -> None:
         super(MultiHeadAttention, self).__init__()
         assert channels % n_heads == 0, "channels must be divisible by n_heads"
-        
+
         self.channels = channels
         self.out_channels = out_channels
         self.n_heads = n_heads
@@ -32,15 +35,15 @@ class MultiHeadAttention(nn.Module):
         self.block_length = block_length
         self.proximal_bias = proximal_bias
         self.proximal_init = proximal_init
-        self.attn = None # Placeholder for compatibility
-        
+        self.attn = None  # Placeholder for compatibility
+
         self.k_channels = channels // n_heads
         self.conv_q = nn.Conv1d(channels, channels, 1)
         self.conv_k = nn.Conv1d(channels, channels, 1)
         self.conv_v = nn.Conv1d(channels, channels, 1)
         self.conv_o = nn.Conv1d(channels, out_channels, 1)
         self.drop = nn.Dropout(p_dropout)
-        
+
         if window_size is not None:
             # logger.info(
             #     "MultiHeadAttention: window_size is set but not used in this wrapper."
@@ -55,8 +58,7 @@ class MultiHeadAttention(nn.Module):
                 torch.randn(n_heads_rel, window_size * 2 + 1, self.k_channels)
                 * rel_stddev
             )
-       
-        
+
         # Initialize Conv1d weights
         nn.init.xavier_uniform_(self.conv_q.weight)
         nn.init.xavier_uniform_(self.conv_k.weight)
@@ -66,12 +68,9 @@ class MultiHeadAttention(nn.Module):
                 self.conv_k.weight.copy_(self.conv_q.weight)
                 if self.conv_k.bias and self.conv_q.bias:
                     self.conv_k.bias.copy_(self.conv_q.bias)
-                
+
     def forward(
-        self, 
-        x: torch.Tensor, 
-        c: torch.Tensor, 
-        attn_mask: Optional[torch.Tensor] = None
+        self, x: torch.Tensor, c: torch.Tensor, attn_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         q = self.conv_q(x)
         k = self.conv_k(c)
@@ -98,9 +97,9 @@ class MultiHeadAttention(nn.Module):
 
         scores = torch.matmul(query / math.sqrt(self.k_channels), key.transpose(-2, -1))
         if self.window_size is not None:
-            assert (
-                t_s == t_t
-            ), "Relative attention is only available for self-attention."
+            assert t_s == t_t, (
+                "Relative attention is only available for self-attention."
+            )
             key_relative_embeddings = self._get_relative_embeddings(self.emb_rel_k, t_s)
             rel_logits = self._matmul_with_relative_keys(
                 query / math.sqrt(self.k_channels), key_relative_embeddings
@@ -115,9 +114,9 @@ class MultiHeadAttention(nn.Module):
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e4)
             if self.block_length is not None:
-                assert (
-                    t_s == t_t
-                ), "Local attention is only available for self-attention."
+                assert t_s == t_t, (
+                    "Local attention is only available for self-attention."
+                )
                 block_mask = (
                     torch.ones_like(scores)
                     .triu(-self.block_length)
@@ -140,7 +139,9 @@ class MultiHeadAttention(nn.Module):
         )  # [b, n_h, t_t, d_k] -> [b, d, t_t]
         return output, p_attn
 
-    def _matmul_with_relative_values(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def _matmul_with_relative_values(
+        self, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
         """
         x: [b, h, l, m]
         y: [h or 1, m, d]
@@ -149,7 +150,9 @@ class MultiHeadAttention(nn.Module):
         ret = torch.matmul(x, y.unsqueeze(0))
         return ret
 
-    def _matmul_with_relative_keys(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def _matmul_with_relative_keys(
+        self, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
         """
         x: [b, h, l, d]
         y: [h or 1, m, d]
@@ -158,7 +161,9 @@ class MultiHeadAttention(nn.Module):
         ret = torch.matmul(x, y.unsqueeze(0).transpose(-2, -1))
         return ret
 
-    def _get_relative_embeddings(self, relative_embeddings: torch.Tensor, length: int) -> torch.Tensor:
+    def _get_relative_embeddings(
+        self, relative_embeddings: torch.Tensor, length: int
+    ) -> torch.Tensor:
         if self.window_size is None:
             raise ValueError("window_size must be set for relative embeddings.")
         max_relative_position = 2 * self.window_size + 1
@@ -239,7 +244,7 @@ class MultiHeadAttention(nn.Module):
         diff = torch.unsqueeze(r, 0) - torch.unsqueeze(r, 1)
         return torch.unsqueeze(torch.unsqueeze(-torch.log1p(torch.abs(diff)), 0), 0)
 
-    
+
 def test() -> None:
     batch_size = 2
     channels = 16
@@ -255,6 +260,7 @@ def test() -> None:
     print("Output shape:", output.shape)
     # Expected shape: [batch_size, channels, time]
     print("Expected shape:", (batch_size, channels, time))
+
 
 if __name__ == "__main__":
     test()
