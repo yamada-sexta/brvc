@@ -111,7 +111,7 @@ def train_model(
     pretrain_g: Union[Path, Literal["base"], Literal["last"], None] = "base",
     pretrain_d: Union[Path, Literal["base"], Literal["last"], None] = "base",
     # is_half: bool = False,
-    accelerator: Accelerator = Accelerator()
+    accelerator: Accelerator = Accelerator(),
 ):
     """Main training function."""
     set_seed(seed)
@@ -212,13 +212,16 @@ def train_model(
             pretrain_d = ckpt_d[-1]
         else:
             pretrain_d = None
-            
+
     if pretrain_g == "base":
         pretrain_g = Path("assets/pretrained_v2/f0G48k.pth")
         # Check if file exists
         if not pretrain_g.exists():
             from huggingface_hub import hf_hub_download
-            logger.warning(f"Pretrained generator not found at {pretrain_g}. Downloading...")
+
+            logger.warning(
+                f"Pretrained generator not found at {pretrain_g}. Downloading..."
+            )
             # Download f0G48k.pth from the VoiceConversionWebUI repo
             # https://huggingface.co/lj1995/VoiceConversionWebUI/tree/main/pretrained_v2
             downloaded_model_path = hf_hub_download(
@@ -226,7 +229,9 @@ def train_model(
                 filename="pretrained_v2/f0G48k.pth",
                 repo_type="model",
             )
-            logger.info(f"Downloaded model to {downloaded_model_path}", main_process_only=True)
+            logger.info(
+                f"Downloaded model to {downloaded_model_path}", main_process_only=True
+            )
             # Move to local path for future use
             os.makedirs(os.path.dirname(pretrain_g), exist_ok=True)
             # Copy to local path for future use
@@ -235,20 +240,25 @@ def train_model(
             os.remove(downloaded_model_path)
             pretrain_g = pretrain_g
             logger.info(f"Moved model to {pretrain_g}", main_process_only=True)
-            
+
     if pretrain_d == "base":
         pretrain_d = Path("assets/pretrained_v2/f0D48k.pth")
         # Check if file exists
         if not pretrain_d.exists():
-            logger.warning(f"Pretrained discriminator not found at {pretrain_d}. Downloading...")
+            logger.warning(
+                f"Pretrained discriminator not found at {pretrain_d}. Downloading..."
+            )
             from huggingface_hub import hf_hub_download
+
             # Download f0D48k.pth from the VoiceConversionWebUI repo
             downloaded_model_path = hf_hub_download(
                 repo_id="lj1995/VoiceConversionWebUI",
                 filename="pretrained_v2/f0D48k.pth",
                 repo_type="model",
             )
-            logger.info(f"Downloaded model to {downloaded_model_path}", main_process_only=True)
+            logger.info(
+                f"Downloaded model to {downloaded_model_path}", main_process_only=True
+            )
             # Move to local path for future use
             os.makedirs(os.path.dirname(pretrain_d), exist_ok=True)
             shutil.copy(downloaded_model_path, pretrain_d)
@@ -258,22 +268,31 @@ def train_model(
             os.remove(downloaded_model_path)
     # Load pretrained
     if pretrain_g is not None:
-        logger.info(f"Loading generator pretrained from {pretrain_g}", main_process_only=True)
+        logger.info(
+            f"Loading generator pretrained from {pretrain_g}", main_process_only=True
+        )
         load_pretrained(net_g, str(pretrain_g), accelerator)
     else:
-        logger.info("No pretrained generator specified, training from scratch.", main_process_only=True)
+        logger.info(
+            "No pretrained generator specified, training from scratch.",
+            main_process_only=True,
+        )
     if pretrain_d is not None:
-        logger.info(f"Loading discriminator pretrained from {pretrain_d}", main_process_only=True)
+        logger.info(
+            f"Loading discriminator pretrained from {pretrain_d}",
+            main_process_only=True,
+        )
         load_pretrained(net_d, str(pretrain_d), accelerator)
     else:
-        logger.info("No pretrained discriminator specified, training from scratch.", main_process_only=True)
+        logger.info(
+            "No pretrained discriminator specified, training from scratch.",
+            main_process_only=True,
+        )
     # Training loop
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
     epoch_bar = tqdm(
-        range(1, epochs + 1),
-        disable=not accelerator.is_main_process,
-        desc=f"Epochs"
+        range(1, epochs + 1), disable=not accelerator.is_main_process, desc=f"Epochs"
     )
     for epoch in epoch_bar:
         net_g.train()
@@ -283,7 +302,7 @@ def train_model(
             train_loader,
             disable=not accelerator.is_main_process,
             desc=f"Epoch {epoch}/{epochs}",
-            leave=False
+            leave=False,
         )
 
         for batch_idx, batch in enumerate(progress_bar):
@@ -370,45 +389,6 @@ def train_model(
             optim_g.step()
             global_step += 1
 
-            # loss_g = loss_gen_all.detach().cpu()
-            # loss_d = loss_disc.detach().cpu()
-
-            # Logging
-            if global_step % log_interval == 0 and accelerator.is_main_process:
-                lr = optim_g.param_groups[0]["lr"]
-
-                # Clamp extreme values for logging
-                loss_mel_log = min(loss_mel.item(), 75)
-                loss_kl_log = min(loss_kl.item(), 9)
-
-                log_msg = (
-                    f"Step {global_step} | Epoch {epoch} [{100.0 * batch_idx / len(train_loader):.0f}%] | "
-                    f"LR: {lr:.6f} | "
-                    f"D: {loss_disc.item():.3f} | "
-                    f"G: {loss_gen.item():.3f} | "
-                    f"FM: {loss_fm.item():.3f} | "
-                    f"Mel: {loss_mel_log:.3f} | "
-                    f"KL: {loss_kl_log:.3f}"
-                )
-                # accelerator.print(log_msg)
-                logger.info(log_msg, main_process_only=True)
-
-                # JSON metrics for parsing
-                metrics = {
-                    "step": global_step,
-                    "epoch": epoch,
-                    "lr": lr,
-                    "loss_disc": loss_disc.item(),
-                    "loss_gen": loss_gen.item(),
-                    "loss_gen_all": loss_gen_all.item(),
-                    "loss_fm": loss_fm.item(),
-                    "loss_mel": loss_mel.item(),
-                    "loss_kl": loss_kl.item(),
-                    "grad_norm_d": grad_norm_d,
-                    "grad_norm_g": grad_norm_g,
-                }
-                logger.info(f"METRICS: {json.dumps(metrics)}", main_process_only=True)
-
             # Update progress bar
             progress_bar.set_postfix(
                 {
@@ -452,37 +432,13 @@ def train_model(
             exp_dir,
         )
 
-        save_final(
-            ckpt=accelerator.unwrap_model(net_g).state_dict(),
-            sr=sample_rate,
-            filter_length=filter_length,
-            inner_channels=m["inter_channels"],
-            hidden_channels=m["hidden_channels"],
-            filter_channels=m["filter_channels"],
-            n_heads=m["n_heads"],
-            n_layers=m["n_layers"],
-            kernel_size=m["kernel_size"],
-            p_dropout=m["p_dropout"],
-            resblock=m["resblock"],
-            resblock_kernel_sizes=m["resblock_kernel_sizes"],
-            resblock_dilation_sizes=m["resblock_dilation_sizes"],
-            upsample_rates=m["upsample_rates"],
-            upsample_initial_channel=m["upsample_initial_channel"],
-            upsample_kernel_sizes=m["upsample_kernel_sizes"],
-            spk_embed_dim=m["spk_embed_dim"],
-            gin_channels=m["gin_channels"],
-            sampling_rate=default_config["data"]["sampling_rate"],
-            if_f0=True,
-            name=exp_dir.name,
-            epoch=epochs,
-            version="v2",
-        )
-
 
 def main():
     from tap import tapify
+
     # setup logging
     import logging
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

@@ -97,10 +97,15 @@ def extract_f0(
     dataloader = DataLoader(dataset, batch_size=None)
     dataloader = accelerator.prepare(dataloader)
 
-    pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
+    # pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
 
+    # logger.info(
+    #     f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
+    # )
+    from lib.features.pitch.swift import Swift
+    pitch_extractor = Swift()
     logger.info(
-        f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
+        f"Processing {len(paths)} files using Swift ({device})", main_process_only=True
     )
 
     for inp, opt1, opt2 in tqdm(

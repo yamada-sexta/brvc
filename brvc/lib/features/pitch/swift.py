@@ -17,22 +17,7 @@ class Swift(PitchExtractor):
 
     def extract_pitch(
         self, audio: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
-        # Placeholder implementation for SwiftF0 pitch extraction
-        # Replace with actual SwiftF0 extraction logic
-        # duration = len(audio) // self.window
-        # f0 = np.linspace(self.f0_min, self.f0_max, num=duration).astype(
-        #     np.float32
-        # )
-        # return f0
-#         @dataclass
-# class PitchResult:
-#     pitch_hz: np.ndarray      # F0 estimates (Hz) for each frame
-#     confidence: np.ndarray    # Model confidence [0.0–1.0] for each frame
-#     timestamps: np.ndarray    # Frame centers in seconds for each frame
-#     voicing: np.ndarray       # Boolean voicing decisions for each frame
-
-    
+    ) -> NDArray[np.float32]:    
         result = self.swift_f0.detect_from_array(audio, self.sr)
         window = self.window / self.sr  # Convert window size to seconds
         frame_times = np.arange(len(result.pitch_hz)) * window + (window / 2)
