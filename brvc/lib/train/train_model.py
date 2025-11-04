@@ -27,12 +27,13 @@ from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
 from lib.config.v2_config import ConfigV2, default_config
+from safetensors.torch import load_file, save_file, save_model
 
 
 def save_checkpoint(
     accelerator: Accelerator,
-    net_g: torch.nn.Module,
-    net_d: torch.nn.Module,
+    net_g: SynthesizerTrnMsNSFsid,
+    net_d: MultiPeriodDiscriminatorV2,
     optim_g: torch.optim.Optimizer,
     optim_d: torch.optim.Optimizer,
     epoch: int,
@@ -44,27 +45,39 @@ def save_checkpoint(
         save_dir = model_dir
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        unwrapped_g = accelerator.unwrap_model(net_g)
-        unwrapped_d = accelerator.unwrap_model(net_d)
+        unwrapped_g: SynthesizerTrnMsNSFsid = accelerator.unwrap_model(net_g)
+        unwrapped_d: MultiPeriodDiscriminatorV2 = accelerator.unwrap_model(net_d)
 
-        torch.save(
-            {
-                "model": unwrapped_g.state_dict(),
-                "optimizer": optim_g.state_dict(),
-                "epoch": epoch,
-                "global_step": global_step,
-            },
-            save_dir / f"G_{global_step}.pth",
+        # Save model weights as safetensors (only tensors allowed).
+        # Optimizer state and scalar metadata (epoch, global_step) are saved separately
+        # in a .opt.pth file because optimizer state dicts contain Python objects.
+        # g_state: dict[str, torch.Tensor] = unwrapped_g.state_dict()
+        # d_state: dict[str, torch.Tensor] = unwrapped_d.state_dict()
+
+        # # Move tensors to CPU to ensure compatibility
+        # g_state_cpu = {k: v.cpu() for k, v in g_state.items()}
+        # d_state_cpu = {k: v.cpu() for k, v in d_state.items()}
+
+        g_safetensors_path = save_dir / f"G_{global_step}.safetensors"
+        d_safetensors_path = save_dir / f"D_{global_step}.safetensors"
+        optimizers_path = save_dir / f"optimizers_{global_step}.pth"
+
+        save_model(
+            unwrapped_g,
+            str(g_safetensors_path),
         )
-
+        save_model(
+            unwrapped_d,
+            str(d_safetensors_path),
+        )
         torch.save(
             {
-                "model": unwrapped_d.state_dict(),
-                "optimizer": optim_d.state_dict(),
+                "optimizer_g": optim_g.state_dict(),
+                "optimizer_d": optim_d.state_dict(),
                 "epoch": epoch,
                 "global_step": global_step,
             },
-            save_dir / f"D_{global_step}.pth",
+            optimizers_path,
         )
 
         logger.info(f"[success] Saved checkpoint at step {global_step}")
@@ -80,11 +93,17 @@ def load_pretrained(
 
     # accelerator.print(f"Loading pretrained from {path}")
     logger.info(f"Loading pretrained from {path}", main_process_only=True)
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    state_dict = ckpt["model"] if "model" in ckpt else ckpt
-
+    # Support both torch .pth-style checkpoints and safetensors files.
     unwrapped = accelerator.unwrap_model(model)
-    unwrapped.load_state_dict(state_dict)
+    if str(path).endswith(".safetensors"):
+        # safetensors returns a dict[str, tensor]
+        state_dict = load_file(path)
+        # load_state_dict accepts the mapping directly
+        unwrapped.load_state_dict(state_dict)
+    else:
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        state_dict = ckpt["model"] if "model" in ckpt else ckpt
+        unwrapped.load_state_dict(state_dict)
 
 
 def train_model(
@@ -289,7 +308,10 @@ def train_model(
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
     epoch_bar = tqdm(
-        range(1, epochs + 1), disable=not accelerator.is_main_process, desc=f"Overall", dynamic_ncols=True
+        range(1, epochs + 1),
+        disable=not accelerator.is_main_process,
+        desc=f"Overall",
+        dynamic_ncols=True,
     )
     for epoch in epoch_bar:
         net_g.train()

@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import Literal, Optional, Union, List
+from typing import Literal, Optional, List
 import librosa
 from numpy.typing import NDArray
-import resampy
-from lib.config.v2_config import default_config, ConfigV2
-from lib.features.emb.hubert import get_hf_hubert_model
-from lib.utils.audio import load_audio
+from lib.config.v2_config import ConfigV2
+from lib.infer.utils.resample import resample_audio
+from lib.infer.utils.rms import change_rms
 import numpy as np
 import logging
 import torch
@@ -17,7 +16,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
     from accelerate import Accelerator
-    from fairseq.models.hubert.hubert import HubertModel as FairseqHubertModel
     from transformers import HubertModel as HfHubertModel, Wav2Vec2FeatureExtractor
 
 logger = logging.getLogger(__name__)
@@ -32,59 +30,6 @@ bh, ah = res
 print(f"High-pass filter coefficients:\nb: {bh}\na: {ah}")
 
 
-def change_rms(
-    data1: NDArray[np.float32],
-    sr1: int,
-    data2: NDArray[np.float32],
-    sr2: int,
-    rate: float,
-) -> NDArray[np.float32]:
-    rms1 = librosa.feature.rms(y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2)
-    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)
-    rms1 = torch.from_numpy(rms1)
-    rms1 = F.interpolate(
-        rms1.unsqueeze(0), size=data2.shape[0], mode="linear"
-    ).squeeze()
-    rms2 = torch.from_numpy(rms2)
-    rms2 = F.interpolate(
-        rms2.unsqueeze(0), size=data2.shape[0], mode="linear"
-    ).squeeze()
-    rms2 = torch.max(rms2, torch.zeros_like(rms2) + 1e-6)
-    data2 *= (
-        torch.pow(rms1, torch.tensor(1 - rate))
-        * torch.pow(rms2, torch.tensor(rate - 1))
-    ).numpy()
-    return data2
-
-
-def resample_audio(
-    audio: NDArray,
-    orig_sr: int,
-    target_sr: int,
-) -> NDArray:
-    # Check if the audio is stereo and downmix to mono
-    if audio.ndim > 1 and audio.shape[1] > 1:
-        # print("Detected stereo audio, downmixing to mono.")
-        # Average the channels to create a mono signal
-        audio_mono = audio.mean(axis=1)
-    else:
-        # Already mono or 1D array
-        audio_mono = audio.flatten()  # Ensure it's 1D in case it's (N, 1)
-
-    # print(f"Mono audio shape after downmixing: {audio_mono.shape}")
-
-    if audio_mono.size < 10:  # A reasonable minimum length for resampling
-        raise ValueError(
-            f"Mono audio signal length ({audio_mono.size}) is too small to resample from {orig_sr} to {target_sr}. "
-            "Ensure the audio file contains actual sound data."
-        )
-
-    # Perform resampling on the mono signal
-    resampled_audio = resampy.resample(audio_mono, orig_sr, target_sr)
-    # print(f"Resampled audio shape: {resampled_audio.shape}")
-    return resampled_audio
-
-
 def interface_cli(
     g_path: Path,
     audio: Path,
@@ -96,6 +41,10 @@ def interface_cli(
     resample_sr: int = 0,
     load_mode: Literal["rvc", "train"] = "train",
 ):
+    if not g_path.exists():
+        raise FileNotFoundError(f"Generator model file not found: {g_path}")
+    if not g_path.is_file():
+        raise ValueError(f"Generator model path is not a file: {g_path}")
     from accelerate import Accelerator
     import torch
     import soundfile as sf
@@ -135,7 +84,7 @@ def interface_cli(
         # ensure dtype is float32
         audio_data = audio_data.astype(np.float32)
     # Save the audio data to check if loading is correct
-    np.save("debug_loaded_audio.npy", audio_data, allow_pickle=False)
+    # np.save("debug_loaded_audio.npy", audio_data, allow_pickle=False)
 
     # Resample to the model's processing SR (if needed).
     if original_sr != target_processing_sr:
@@ -198,15 +147,25 @@ def interface_cli(
     print(f"Spectrum channels: {filter_length // 2 + 1}")
     print(f"Segment size: {ConfigV2.Train.segment_size // hop_length}")
     print(f"Hop length: {hop_length}")
+    if g_path.suffix == ".safetensors":
+        import safetensors.torch
 
-    cpt = torch.load(g_path, map_location="cpu")
-    if load_mode == "rvc":
-        del net_g.enc_q
-        net_g.load_state_dict(cpt["weight"])
-    elif load_mode == "train":
-        net_g.load_state_dict(cpt["model"])
+        cpt = safetensors.torch.load_file(g_path)
+        net_g.load_state_dict(cpt)
+    elif g_path.suffix == ".pth" or g_path.suffix == ".pt":
+        cpt = torch.load(g_path, map_location="cpu")
+        if load_mode == "rvc":
+            net_g.load_state_dict(cpt["weight"])
+        elif load_mode == "train":
+            net_g.load_state_dict(cpt["model"])
+        else:
+            raise ValueError(
+                f"Invalid load_mode: {load_mode}. Choose 'rvc' or 'train'."
+            )
     else:
-        raise ValueError(f"Invalid load_mode: {load_mode}. Choose 'rvc' or 'train'.")
+        raise ValueError(f"Unsupported model file extension: {g_path.suffix}")
+
+    del net_g.enc_q  # remove unused module to save memory
     net_g.eval()
     net_g.to(device)
 
@@ -369,6 +328,7 @@ def get_f0(
     # }
     # print(f"F0 Extraction Debug Info: {json.dumps(debug_info, indent=2)}")
     from lib.features.pitch.swift import Swift
+
     f0_extractor = Swift(
         # sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
     )
@@ -395,6 +355,7 @@ def get_f0(
     # Should be the same as the RVC implementation
     return f0_coarse, f0bak
 
+
 def inference(
     net_g: "SynthesizerTrnMsNSFsid",
     audio: NDArray[np.float32],
@@ -417,6 +378,7 @@ def inference(
 
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import get_hf_hubert_model
+
     hubert, feature_extractor = get_hf_hubert_model()
 
     logger.info("Starting inference pipeline...")
@@ -428,7 +390,7 @@ def inference(
     t_center = sr * x_center
     t_max = sr * x_max
     import json
-    
+
     hubert.to(device)
     hubert.eval()
     # feature_extractor.to(device)

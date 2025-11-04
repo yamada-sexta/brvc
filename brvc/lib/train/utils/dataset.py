@@ -1,16 +1,12 @@
 import logging
 from pathlib import Path
 import traceback
-from typing import Union
 import torch
 import os
-import numpy as np
-from numpy.typing import NDArray
 import safetensors.torch
 
 from lib.train.utils.mel_processing import spectrogram_torch
-from lib.train.utils.path import load_filepaths_and_text, load_wav_to_torch
-import csv
+from lib.train.utils.path import load_wav_to_torch
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +29,6 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         max_text_len: int,  # e.g. 5000
         min_text_len: int,  # e.g. 1
     ):
-        # if isinstance(audio_and_text_path, (str, Path)):
-        #     # Load from file, assuming it's CSV with 3 columns
-        #     self.audio_and_text_path = []
-        #     with open(audio_and_text_path, newline="", encoding="utf-8") as csvfile:
-        #         reader = csv.reader(csvfile)
-        #         for row in reader:
-        #             if len(row) != 3:
-        #                 raise ValueError("Each row must have exactly 3 columns.")
-        #             self.audio_and_text_path.append(
-        #                 (Path(row[0]), Path(row[1]), Path(row[2]))
-        #             )
-        #  isinstance(audio_and_text_path, list) and all(
-        #     isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path
-        # ):
-        #     self.audio_and_text_path = audio_and_text_path
-        # else:
-        #     raise ValueError("Invalid type for audio_and_text_path")
         assert all(
             isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path
         ), "audio_and_text_path must be a list of tuples with 3 elements each"
