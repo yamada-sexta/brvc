@@ -52,21 +52,9 @@ class SineGen(nn.Module):
         """
         a = torch.arange(1, upp + 1, dtype=f0.dtype, device=f0.device)
         rad = f0 / self.sampling_rate * a
-        # Use all harmonic channels when computing the phase increment for
-        # accumulation. rad has shape (batch, length, upp) and we want
-        # rad2 to be (batch, length-1, upp) so cumsum over time produces
-        # a (batch, length-1, upp) accumulator which we can pad and add
-        # back to `rad`.
-        rad2 = torch.fmod(rad[:, :-1, :].float() + 0.5, 1.0) - 0.5
-        rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0)  # (batch, length-1, upp)
-        # Prepend a zero-frame along the length dimension to match `rad`'s length
-        zero_frame = torch.zeros(
-            (rad_acc.shape[0], 1, rad_acc.shape[2]),
-            dtype=rad_acc.dtype,
-            device=rad_acc.device,
-        )
-        rad_acc_padded = torch.cat([zero_frame, rad_acc], dim=1)  # (batch, length, upp)
-        rad += rad_acc_padded
+        rad2 = torch.fmod(rad[:, :-1, -1:].float() + 0.5, 1.0) - 0.5
+        rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0)
+        rad += F.pad(rad_acc, (0, 0, 1, 0), mode="constant")
         rad = rad.reshape(f0.shape[0], -1, 1)
         b = torch.arange(1, self.dim + 1, dtype=f0.dtype, device=f0.device).reshape(
             1, 1, -1
@@ -91,10 +79,10 @@ class SineGen(nn.Module):
             f0 = f0.unsqueeze(-1)
             sine_waves = self._f02sine(f0, upp) * self.sine_amp
             uv = self._f02uv(f0)
-            uv: torch.Tensor = F.interpolate(
+            uv = F.interpolate(
                 uv.transpose(2, 1), scale_factor=float(upp), mode="nearest"
             ).transpose(2, 1)
-            noise_amp: torch.Tensor = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
+            noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
             noise = noise_amp * torch.randn_like(sine_waves)
             sine_waves = sine_waves * uv + noise
         return sine_waves, uv, noise

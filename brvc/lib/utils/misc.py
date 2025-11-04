@@ -9,7 +9,7 @@ def init_weights(m, mean: float = 0.0, std: float = 0.01):
         m.weight.data.normal_(mean, std)
 
 
-def sequence_mask(length: torch.Tensor, max_length: Optional[int] = None):
+def sequence_mask(length: torch.Tensor, max_length: Optional[int] = None) -> torch.Tensor:
     if max_length is None:
         max_length = int(length.max().item())
     x = torch.arange(max_length, dtype=length.dtype, device=length.device)

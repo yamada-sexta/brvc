@@ -9,7 +9,7 @@ from lib.modules.ffn import FFN
 from lib.modules.multihead_attention import MultiHeadAttention
 
 class LayerNorm(nn.Module):
-    def __init__(self, channels, eps=1e-5):
+    def __init__(self, channels: int, eps: float = 1e-5):
         super(LayerNorm, self).__init__()
         self.channels = channels
         self.eps = eps
@@ -69,7 +69,7 @@ class Encoder(nn.Module):
                 )
             )
             self.norm_layers_2.append(LayerNorm(hidden_channels))
-
+            
     def forward(self, x: torch.Tensor, x_mask: torch.Tensor) -> torch.Tensor:
         attn_mask = x_mask.unsqueeze(2) * x_mask.unsqueeze(-1)
         x = x * x_mask
@@ -80,8 +80,10 @@ class Encoder(nn.Module):
             y = attn_layers(x, x, attn_mask)
             y = self.drop(y)
             x = norm_layers_1(x + y)
+
             y = ffn_layers(x, x_mask)
             y = self.drop(y)
             x = norm_layers_2(x + y)
         x = x * x_mask
         return x
+

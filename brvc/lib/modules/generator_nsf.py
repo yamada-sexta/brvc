@@ -34,9 +34,6 @@ class GeneratorNSF(nn.Module):
         self.m_source = SourceModuleHnNSF(
             sampling_rate=sr,
             harmonic_num=0,
-            sine_amp=0.1,
-            add_noise_std=0.003,
-            voiced_threshod=0,
             # is_half=is_half,
         )
         self.noise_convs = nn.ModuleList()
@@ -61,8 +58,8 @@ class GeneratorNSF(nn.Module):
             self.ups.append(
                 weight_norm(
                     ConvTranspose1d(
-                        in_channels=c_prev,
-                        out_channels=c_cur,
+                        upsample_initial_channel // (2**i),
+                        upsample_initial_channel // (2 ** (i + 1)),
                         kernel_size=k,
                         stride=u,
                         padding=(k - u) // 2,
@@ -90,7 +87,7 @@ class GeneratorNSF(nn.Module):
                 )
         self.resblocks = nn.ModuleList()
 
-        ch: int = upsample_initial_channel  # Fix type checker error
+        ch: int = -1  # Fix type checker error
         for i in range(len(self.ups)):
             ch: int = upsample_initial_channel // (2 ** (i + 1))
             for j, (k, d) in enumerate(
@@ -98,11 +95,14 @@ class GeneratorNSF(nn.Module):
             ):
                 self.resblocks.append(
                     res_block(
-                        channels=ch, kernel_size=k, dilation=d, # type: ignore
-                        lrelu_slope=lrelu_slope
+                        channels=ch,
+                        kernel_size=k,
+                        dilation=d, # type: ignore
+                        lrelu_slope=lrelu_slope,
                     )
                 )
-
+        if ch == -1:
+            raise RuntimeError("ch is not assigned")
         self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
         self.ups.apply(init_weights)
 
@@ -121,30 +121,41 @@ class GeneratorNSF(nn.Module):
     ):
         har_source, noi_source, uv = self.m_source(f0, self.upp)
         har_source = har_source.transpose(1, 2)
-        
+        if n_res is not None:
+            assert isinstance(n_res, torch.Tensor)
+            n = int(n_res.item())
+            if n * self.upp != har_source.shape[-1]:
+                har_source = F.interpolate(har_source, size=n * self.upp, mode="linear")
+            if n != x.shape[-1]:
+                x = F.interpolate(x, size=n, mode="linear")
+
         x = self.conv_pre(x)
         if g is not None:
             x = x + self.cond(g)
-        
-        for i in range(self.num_upsamples):
-            x = F.leaky_relu(x, self.lrelu_slope)
-            x = self.ups[i](x)
-            x_source = self.noise_convs[i](har_source)
-            x = x + x_source
-            xs = None
-            for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i * self.num_kernels + j](x)
-                else:
-                    xs += self.resblocks[i * self.num_kernels + j](x)
-            if xs is None:
-                raise RuntimeError("xs is None")
-            x = xs / self.num_kernels
-            
+
+        for i, (ups, noise_convs) in enumerate(zip(self.ups, self.noise_convs)):
+            if i < self.num_upsamples:
+                x = F.leaky_relu(x, self.lrelu_slope)
+                x = ups(x)
+                x_source = noise_convs(har_source)
+                x = x + x_source
+                xs: Optional[torch.Tensor] = None
+                l = [i * self.num_kernels + j for j in range(self.num_kernels)]
+                for j, resblock in enumerate(self.resblocks):
+                    if j in l:
+                        if xs is None:
+                            xs = resblock(x)
+                        else:
+                            xs += resblock(x)
+                # This assertion cannot be ignored! \
+                # If ignored, it will cause torch.jit.script() compilation errors
+                assert isinstance(xs, torch.Tensor)
+                x = xs / self.num_kernels
+                
         x = F.leaky_relu(x)
         x = self.conv_post(x)
         x = torch.tanh(x)
-
+        
         return x
 
     def remove_weight_norm(self):
@@ -154,4 +165,4 @@ class GeneratorNSF(nn.Module):
             if isinstance(l, torch.Tensor):
                 continue
             else:
-                l.remove_weight_norm() # type: ignore
+                l.remove_weight_norm()  # type: ignore

@@ -75,6 +75,7 @@ class SynthesizerTrnMsNSFsid(nn.Module):
 
         self.spk_embed_dim = spk_embed_dim
         self.enc_p = TextEncoder(
+            txt_channels,
             inter_channels,
             hidden_channels,
             filter_channels,
@@ -83,7 +84,6 @@ class SynthesizerTrnMsNSFsid(nn.Module):
             kernel_size,
             self.p_dropout,
             lrelu_slope=lrelu_slope,
-            in_channels=txt_channels,
         )
         self.dec = GeneratorNSF(
             inter_channels,

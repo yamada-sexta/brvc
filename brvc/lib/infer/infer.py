@@ -37,9 +37,7 @@ def change_rms(
     sr2: int,
     rate: float,
 ) -> NDArray[np.float32]:
-    rms1 = librosa.feature.rms(
-        y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2
-    )  # 每半秒一个点
+    rms1 = librosa.feature.rms(y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2)
     rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)
     rms1 = torch.from_numpy(rms1)
     rms1 = F.interpolate(
@@ -99,7 +97,7 @@ def interface_cli(
     from accelerate import Accelerator
     import torch
     import soundfile as sf
-    import av
+
     target_processing_sr = 16000
     logger.info("Starting inference...")
     accelerator = Accelerator()
@@ -120,6 +118,8 @@ def interface_cli(
         )
         audio_data = np.mean(audio_data, axis=1)
 
+    gain = 1.933333333333333  # adjust as desired, e.g., 1.1–1.5
+    audio_data *= gain
     # At this point audio_data should be float32 in approximately -1..1 range.
     # If it's outside that range (some files store int16 but requested as float),
     # we normalize by the max absolute value to avoid clipping.
@@ -134,34 +134,40 @@ def interface_cli(
         audio_data = audio_data.astype(np.float32)
     # Save the audio data to check if loading is correct
     np.save("debug_loaded_audio.npy", audio_data, allow_pickle=False)
-    
-        # Resample to the model's processing SR (if needed).
+
+    # Resample to the model's processing SR (if needed).
     if original_sr != target_processing_sr:
-        logger.info(f"Resampling audio from {original_sr} Hz -> {target_processing_sr} Hz for processing...")
+        logger.info(
+            f"Resampling audio from {original_sr} Hz -> {target_processing_sr} Hz for processing..."
+        )
         # Preferably use your project's resample_audio helper if available
         # try:
-            # if resample_audio is defined/importable in your codebase, use it
-        audio_data = resample_audio(audio_data, orig_sr=original_sr, target_sr=target_processing_sr)
+        # if resample_audio is defined/importable in your codebase, use it
+        audio_data = resample_audio(
+            audio_data, orig_sr=original_sr, target_sr=target_processing_sr
+        )
         # except NameError:
         #     # resample_audio not defined in this scope — use fallback
         #     audio_data = fallback_resample(audio_data, orig_sr=original_sr, target_sr=target_processing_sr)
         # except Exception as e:
         #     logger.exception("Resampling failed.")
         #     raise
-        
+
     post_max = float(np.abs(audio_data).max()) if audio_data.size else 0.0
     if post_max > 1.0:
-        logger.info(f"Post-resample peak {post_max} > 1. Normalizing to avoid clipping.")
+        logger.info(
+            f"Post-resample peak {post_max} > 1. Normalizing to avoid clipping."
+        )
         audio_data /= post_max
     times = [0.0, 0.0, 0.0]
-    
+
     logger.info("Loading synthesis model...")
 
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 
     filter_length = ConfigV2.Data.filter_length
     hop_length = ConfigV2.Data.hop_length
-    M = ConfigV2.Model    
+    M = ConfigV2.Model
 
     net_g = SynthesizerTrnMsNSFsid(
         spec_channels=filter_length // 2 + 1,
@@ -186,7 +192,7 @@ def interface_cli(
         lrelu_slope=0.1,
         txt_channels=768,
     )
-    
+
     print(f"Spectrum channels: {filter_length // 2 + 1}")
     print(f"Segment size: {ConfigV2.Train.segment_size // hop_length}")
     print(f"Hop length: {hop_length}")
@@ -251,11 +257,11 @@ def process_chunk(
 
     assert feats.dim() == 1, "Input audio should be 1D."
     feats = feats.view(1, -1)
-    feats = feats.to(device)
-    padding_mask = torch.BoolTensor(feats.shape).fill_(False).to(device)
+    # feats = feats.to(device)
+    padding_mask = torch.BoolTensor(feats.shape).to(device).fill_(False)
 
     inputs = {
-        "source": feats,
+        "source": feats.to(device),
         "padding_mask": padding_mask,
         "output_layer": 12,
     }
@@ -290,13 +296,10 @@ def process_chunk(
         pitchf = pitchf[:, :p_len]
 
     if protect < 0.5 and feats0 is not None:
-        # Create protection mask based on F0 (voiced/unvoiced)
-        pitchff = pitch.clone()
-        pitchff[pitch > 0] = 1
-        pitchff[pitch < 1] = protect
+        pitchff = pitchf.clone()
+        pitchff[pitchf > 0] = 1
+        pitchff[pitchf < 1] = protect
         pitchff = pitchff.unsqueeze(-1)
-
-        # Mix original and current features
         feats = feats * pitchff + feats0 * (1 - pitchff)
         feats = feats.to(feats0.dtype)
     else:
@@ -304,6 +307,7 @@ def process_chunk(
 
     p_len = torch.tensor([p_len], device=device).long()
     with torch.no_grad():
+        args = (feats, p_len, pitch, pitchf, sid)
         res = net_g.infer(
             phone=feats,
             phone_lengths=p_len,
@@ -311,9 +315,9 @@ def process_chunk(
             nsff0=pitchf,
             sid=torch.tensor([sid], device=device).long(),
         )
+        audio1: NDArray[np.float32] = res[0][0, 0].data.cpu().float().numpy()
 
-        converted_audio: NDArray[np.float32] = res[0][0, 0].data.cpu().float().numpy()
-
+    del feats, p_len, padding_mask
     t2 = time()
     # Run Garbage Collection
     from gc import collect
@@ -326,8 +330,8 @@ def process_chunk(
     times[1] += t2 - t1
 
     # save converted audio for debugging
-    np.save("debug_converted_audio.npy", converted_audio, allow_pickle=False)
-    return converted_audio
+    np.save("debug_converted_audio.npy", audio1, allow_pickle=False)
+    return audio1
 
 
 import json

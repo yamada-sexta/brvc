@@ -52,7 +52,6 @@ class SourceModuleHnNSF(nn.Module):
         # to merge source harmonics into a single excitation
         self.l_linear = torch.nn.Linear(harmonic_num + 1, 1)
         self.l_tanh = torch.nn.Tanh()
-        # self.ddtype:int = -1
 
     def forward(self, x: torch.Tensor, upp: int = 1) -> tuple[torch.Tensor, None, None]:
         sine_wavs, uv, _ = self.l_sin_gen(x, upp)
