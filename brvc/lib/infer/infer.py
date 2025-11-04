@@ -234,7 +234,7 @@ def process_chunk(
     feats = feats.float()
     if feats.dim() == 2:  # stereo audio
         feats = feats.mean(-1)
-    # assert feats.dim() == 1, feats.dim(), "Input audio should be 1D."
+    
     assert feats.dim() == 1, "Input audio should be 1D."
     feats = feats.view(1, -1)
     feats = feats.to(device)
@@ -311,7 +311,6 @@ def get_f0(
     x: np.ndarray,
     p_len: int,
     f0_up_key: int,
-    # inp_f0: Optional[np.ndarray] = None,
     sample_rate: int = 16000,
     window: int = 160,
     f0_min: int = 50,
@@ -320,15 +319,25 @@ def get_f0(
     logger.info("Loading F0 extractor...")
     device = accelerator.device
     from lib.features.pitch.crepe import CRePE
+    
+    f0_extractor = CRePE(device=device, sample_rate=sample_rate, window_size=window, f0_min=f0_min, f0_max=f0_max)
 
-    # f0_mel_min = 1127 * np.log1p(f0_min / 700)
-    # f0_mel_max = 1127 * np.log1p(f0_max / 700)
-    f0_extractor = CRePE(device=device, sample_rate=sample_rate, hop_length=window)
-
-    f0 = f0_extractor.compute_f0(x, p_len=p_len)
+    f0 = f0_extractor.extract_pitch(x, p_len=p_len)
+    
+    f0 *= pow(2, f0_up_key / 12)
+    
+    f0_mel_min = 1127 * np.log(1 + f0_extractor.f0_min / 700)
+    f0_mel_max = 1127 * np.log(1 + f0_extractor.f0_max / 700)
+    f0_mel = 1127 * np.log(1 + f0 / 700)
+    f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (
+        f0_mel_max - f0_mel_min
+    ) + 1
+    f0_mel[f0_mel <= 1] = 1
+    f0_mel[f0_mel > 255] = 255
+    f0_coarse = np.rint(f0_mel).astype(np.int32)
     f0 *= 2 ** (f0_up_key / 12)
-    f0_course = f0_extractor.coarse_f0(f0)
-    return f0_course, f0
+    # f0_coarse = f0_extractor.coarse_f0(f0)
+    return f0_coarse, f0
 
 
 def inference(
@@ -341,7 +350,6 @@ def inference(
     rms_mix_rate: float = 0.25,
     sr: int = 16000,
     resample_sr: int = 48000,
-    # Pipeline config constants
     tgt_sr: int = 48000,
     window: int = 160,  # hop_length for 16kHz (should match sr // 100)
     x_pad: int = 1,
@@ -373,7 +381,7 @@ def inference(
     if audio_pad.shape[0] < t_max:
         audio_sum = np.zeros_like(audio)
         for i in range(window):
-            audio_sum += audio_pad[i : i - window]
+            audio_sum += np.abs(audio_pad[i : i - window])
         for t in range(t_center, audio.shape[0], t_center):
             n = (
                 t
@@ -448,7 +456,7 @@ def inference(
         )[t_pad_tgt:-t_pad_tgt]
     )
 
-    audio_opt_array = np.concatenate(audio_opt, axis=0)
+    audio_opt_array: NDArray[np.float32] = np.concatenate(audio_opt, axis=0)
     
     if rms_mix_rate != 1:
         audio_out = change_rms(
