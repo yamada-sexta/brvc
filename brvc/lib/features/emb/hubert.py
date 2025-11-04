@@ -18,13 +18,13 @@ repo_id: str = "lj1995/VoiceConversionWebUI"
 hf_model_path = "assets/hf/hubert_base"
 
 
-def download_rvc_hubert_tokenizer():
+def download_rvc_hubert():
     from huggingface_hub import hf_hub_download
 
     model_path = Path("assets/hubert/hubert_base.pt")
     if not model_path.exists():
         logger.info(f"{model_path} not found. Downloading model from Hugging Face...")
-        hf_hub_download(
+        downloaded_model_path = hf_hub_download(
             repo_id=repo_id,
             filename="hubert_base.pt",
             local_dir=model_path.parent,
@@ -43,17 +43,16 @@ def download_rvc_hubert_tokenizer():
     else:
         logger.info(f"Model already exists at {model_path}, skipping download.")
 
-from lib.features.emb.hubert import convert_fairseq_to_hf_hubert
+
 def convert_fairseq_to_hf_hubert():
-    from lib.features.emb.convert import convert_hubert_fairseq_to_hf
+    from lib.features.emb.convert import convert_hubert_checkpoint
 
     fairseq_model_path = "assets/hubert/hubert_base.pt"
-    hf_model_path = "assets/hf/hubert_base"
     if not Path(hf_model_path).exists():
         logger.info("Converting Fairseq HuBERT model to Hugging Face format...")
-        convert_hubert_fairseq_to_hf(
-            fairseq_model_path=fairseq_model_path,
-            hf_model_path=hf_model_path,
+        convert_hubert_checkpoint(
+            checkpoint_path=fairseq_model_path,
+            pytorch_dump_folder_path=hf_model_path,
         )
         logger.info(f"Converted model saved to {hf_model_path}")
     else:
@@ -65,21 +64,18 @@ def convert_fairseq_to_hf_hubert():
 from transformers import HubertModel, Wav2Vec2FeatureExtractor
 
 
-def get_hf_hubert_model():
-    model = HubertModel.from_pretrained("assets/hf/hubert_base")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-        "assets/hf/hubert_base"
-    )
-    return model, feature_extractor
-
-
-# # The directory where your conversion script saved the files
-# model_dir = "assets/m"
-
-# # Load the Hugging Face HuBERT model
-# hf_model = HubertModel.from_pretrained(model_dir)
-
-# # Load the feature extractor (for preparing audio data)
-# feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_dir)
-
-# print("Hugging Face HuBERT model and feature extractor loaded successfully!")
+def get_hf_hubert_model() -> tuple[HubertModel, Wav2Vec2FeatureExtractor]:
+    try:
+        model = HubertModel.from_pretrained("assets/hf/hubert_base")
+        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+            "assets/hf/hubert_base"
+        )
+        return model, feature_extractor
+    except Exception as e:
+        download_rvc_hubert()
+        convert_fairseq_to_hf_hubert()
+        model = HubertModel.from_pretrained("assets/hf/hubert_base")
+        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+            "assets/hf/hubert_base"
+        )
+        return model, feature_extractor
