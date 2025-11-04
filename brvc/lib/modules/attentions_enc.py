@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 import math
 
-from lib.modules.ffn import FFN
+from lib.modules.ffn import FeedForwardNetwork
 from lib.modules.multihead_attention import MultiHeadAttention
 
 class LayerNorm(nn.Module):
@@ -60,7 +60,7 @@ class Encoder(nn.Module):
             )
             self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(
-                FFN(
+                FeedForwardNetwork(
                     hidden_channels,
                     hidden_channels,
                     filter_channels,

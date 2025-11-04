@@ -3,7 +3,7 @@ from torch import nn
 import torch
 from torch.nn import functional as F
 
-class FFN(nn.Module):
+class FeedForwardNetwork(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -14,7 +14,7 @@ class FFN(nn.Module):
         activation: Optional[str] = None,
         causal: bool = False,
     ) -> None:
-        super(FFN, self).__init__()
+        super(FeedForwardNetwork, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.filter_channels = filter_channels
