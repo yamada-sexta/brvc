@@ -246,7 +246,7 @@ def convert_hubert_checkpoint(
     checkpoint_path: str,
     pytorch_dump_folder_path: str,
     config_path: Optional[str] = None,
-    dict_path: Optional[str] = None,
+    # dict_path: Optional[str] = None,
     # is_finetuned=False,
 ):
     """
@@ -254,7 +254,8 @@ def convert_hubert_checkpoint(
     """
     from fairseq import checkpoint_utils
     model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task([checkpoint_path])
-
+    if saved_cfg is None:
+        raise ValueError("Could not find model configuration.")
     if config_path is not None:
         config = HubertConfig.from_pretrained(config_path)
     else:
@@ -263,6 +264,7 @@ def convert_hubert_checkpoint(
             num_hidden_layers=saved_cfg.model.encoder_layers,
             num_attention_heads=saved_cfg.model.encoder_attention_heads,
             intermediate_size=saved_cfg.model.encoder_ffn_embed_dim,
+            hidden_act=saved_cfg.model.activation_fn,
         )
     
     hf_wav2vec = HubertModel(config)
@@ -297,15 +299,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_path", default="assets/hubert/hubert_base.pt", type=str, help="Path to fairseq checkpoint"
     )
-    # parser.add_argument(
-    #     "--dict_path", default=None, type=str, help="Path to dict of fine-tuned model"
-    # )
-    # parser.add_argument(
-    #     "--config_path",
-    #     default=None,
-    #     type=str,
-    #     help="Path to hf config.json of model to convert",
-    # )
     args = parser.parse_args()
     with safe_globals([Dictionary]):
         convert_hubert_checkpoint(
