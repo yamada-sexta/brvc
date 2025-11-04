@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Literal, Optional, Union, List
+import librosa
 from numpy.typing import NDArray
 import resampy
 from lib.config.v2_config import default_config, ConfigV2
@@ -129,7 +130,7 @@ def interface_cli(
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
     resample_sr: int = 0,
-    load_mode: Literal["rvc","train"] = "train"
+    load_mode: Literal["rvc", "train"] = "train",
 ):
     from accelerate import Accelerator
     import torch
@@ -190,7 +191,7 @@ def interface_cli(
     audio_out = inference(
         net_g=net_g,
         audio=audio_data,
-        sample_rate=sample_rate,
+        # sample_rate=sample_rate,
         accelerator=accelerator,
         f0_offset=f0_offset,
         protect=protect,
@@ -205,11 +206,10 @@ def interface_cli(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Save output audio at the target sample rate
-    output_sr = resample_sr if resample_sr != 0 else sample_rate
-    logger.info(f"Saving output to {output} at {output_sr}Hz...")
-    sf.write(output, audio_out, output_sr)
+    
+    sf.write(output, audio_out, samplerate=sample_rate, subtype="PCM_16")
 
-    logger.info("Inference complete!")
+    # logger.info("Inference complete!")
     return output
 
 
@@ -234,7 +234,7 @@ def process_chunk(
     feats = feats.float()
     if feats.dim() == 2:  # stereo audio
         feats = feats.mean(-1)
-    
+
     assert feats.dim() == 1, "Input audio should be 1D."
     feats = feats.view(1, -1)
     feats = feats.to(device)
@@ -251,6 +251,9 @@ def process_chunk(
         logits = hubert_model.extract_features(**inputs)
         feats: torch.Tensor = logits[0]
 
+    # Save feats as npy for debugging
+    feats_np: NDArray[np.float32] = feats.squeeze(0).float().cpu().numpy()
+    np.save("debug_feats.npy", feats_np, allow_pickle=False)
     if protect < 0.5:
         feats0 = feats.clone()
     else:
@@ -260,6 +263,10 @@ def process_chunk(
     if protect < 0.5 and feats0 is not None:
         feats0 = F.interpolate(feats0.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
 
+    # Save interpolated feats as npy for debugging
+    feats_interp_np: NDArray[np.float32] = feats.squeeze(0).float().cpu().numpy()
+    np.save("debug_feats_interp.npy", feats_interp_np, allow_pickle=False)
+    
     t1 = time()
 
     p_len = audio.shape[0] // window
@@ -303,7 +310,13 @@ def process_chunk(
         torch.cuda.empty_cache()
     times[0] += t1 - t0
     times[1] += t2 - t1
+    
+    # save converted audio for debugging
+    np.save("debug_converted_audio.npy", converted_audio, allow_pickle=False)
     return converted_audio
+
+
+import json
 
 
 def get_f0(
@@ -311,23 +324,35 @@ def get_f0(
     x: np.ndarray,
     p_len: int,
     f0_up_key: int,
-    sample_rate: int = 16000,
     window: int = 160,
     f0_min: int = 50,
     f0_max: int = 1100,
+    sr: int = 16000,
 ) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
     logger.info("Loading F0 extractor...")
     device = accelerator.device
     from lib.features.pitch.crepe import CRePE
-    
-    f0_extractor = CRePE(device=device, sample_rate=sample_rate, window_size=window, f0_min=f0_min, f0_max=f0_max)
+
+    debug_info = {
+        "p_len": p_len,
+        "f0_up_key": f0_up_key,
+        "window": window,
+        "f0_min": f0_min,
+        "f0_max": f0_max,
+    }
+    print(f"F0 Extraction Debug Info: {json.dumps(debug_info, indent=2)}")
+    f0_extractor = CRePE(
+        sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
+    )
 
     f0 = f0_extractor.extract_pitch(x, p_len=p_len)
-    
+
     f0 *= pow(2, f0_up_key / 12)
-    
-    f0_mel_min = 1127 * np.log(1 + f0_extractor.f0_min / 700)
-    f0_mel_max = 1127 * np.log(1 + f0_extractor.f0_max / 700)
+    f0bak = f0.copy()
+
+    f0bak = f0.copy()
+    f0_mel_min = 1127 * np.log(1 + f0_min / 700)
+    f0_mel_max = 1127 * np.log(1 + f0_max / 700)
     f0_mel = 1127 * np.log(1 + f0 / 700)
     f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (
         f0_mel_max - f0_mel_min
@@ -335,27 +360,32 @@ def get_f0(
     f0_mel[f0_mel <= 1] = 1
     f0_mel[f0_mel > 255] = 255
     f0_coarse = np.rint(f0_mel).astype(np.int32)
-    f0 *= 2 ** (f0_up_key / 12)
-    # f0_coarse = f0_extractor.coarse_f0(f0)
-    return f0_coarse, f0
+    
+    # Save for debugging
+    # np.save("debug_f0bak.npy", f0bak)
+    # np.save("debug_f0_coarse.npy", f0_coarse)
+    # Should be the same as the RVC implementation
+    return f0_coarse, f0bak
 
 
+# {'visible': True, 'value': 0.33, '__type__': 'update'}, {'value': '', '__type__': 'update'})
+# {"file_index": "", "index_rate": 0.75, "tgt_sr": 48000, "resample_sr": 0, "rms_mix_rate": 0.25, "version": "v2", "protect": 0.33, "f0_file": false, "window": 160, "t_max": 1040000, "t_query": 160000, "t_center": 960000, "t_pad": 48000, "t_pad2": 96000, "t_pad_tgt": 144000}
+# Pipeline initialized with {"x_pad": 3, "x_query": 10, "x_center": 60, "x_max": 65, "is_half": true, "t_pad": 48000, "t_pad_tgt": 144000, "t_pad2": 96000, "t_query": 160000, "t_center": 960000, "t_max": 1040000}
 def inference(
     net_g: "SynthesizerTrnMsNSFsid",
     audio: NDArray[np.float32],
     accelerator: "Accelerator",
-    sample_rate: int = 48000,
     f0_offset: int = 0,
     protect: float = 0.33,
     rms_mix_rate: float = 0.25,
     sr: int = 16000,
-    resample_sr: int = 48000,
     tgt_sr: int = 48000,
+    resample_sr: int = 0,
     window: int = 160,  # hop_length for 16kHz (should match sr // 100)
-    x_pad: int = 1,
-    x_query: int = 6,
-    x_center: int = 38,
-    x_max: int = 41,
+    x_pad: int = 3,
+    x_query: int = 10,
+    x_center: int = 60,
+    x_max: int = 65,
     f0_min: int = 50,
     f0_max: int = 1100,
     times: List[float] = [0.0, 0.0, 0.0],
@@ -374,7 +404,21 @@ def inference(
     t_query = sr * x_query
     t_center = sr * x_center
     t_max = sr * x_max
+    import json
 
+    debug_info = {
+        "x_pad": x_pad,
+        "x_query": x_query,
+        "x_center": x_center,
+        "x_max": x_max,
+        "t_pad": t_pad,
+        "t_pad_tgt": t_pad_tgt,
+        "t_pad2": t_pad2,
+        "t_query": t_query,
+        "t_center": t_center,
+        "t_max": t_max,
+    }
+    logger.info(f"Debug Info: {json.dumps(debug_info, indent=2)}")
     audio = signal.filtfilt(bh, ah, audio)
     audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
     opt_ts: list[int] = []
@@ -405,7 +449,7 @@ def inference(
         p_len=p_len,
         x=audio_pad,
         f0_up_key=f0_offset,
-        sample_rate=sr,
+        sr=sr,
     )
     pitch = pitch[:p_len]
     pitchf = pitchf[:p_len]
@@ -436,10 +480,7 @@ def inference(
             )[t_pad_tgt:-t_pad_tgt]
         )
         s = t
-        
-    # if t is None:
-        # logger.info(f"Processing single segment {total_segments}/{total_segments}...")
-        # t = 0
+
     logger.info(f"Processing final segment {total_segments}/{total_segments}...")
     audio_opt.append(
         process_chunk(
@@ -456,33 +497,42 @@ def inference(
         )[t_pad_tgt:-t_pad_tgt]
     )
 
-    audio_opt_array: NDArray[np.float32] = np.concatenate(audio_opt, axis=0)
+    audio_opt_array: NDArray[np.float32] = np.concatenate(audio_opt)
     
+    # save for debugging
+    np.save("debug_audio_opt_array.npy", audio_opt_array, allow_pickle=False)
+
     if rms_mix_rate != 1:
         audio_out = change_rms(
             data1=audio,
-            sr1=sr,  # Input is at 16kHz
+            sr1=16000,  # Input is at 16kHz
             data2=audio_opt_array,
             sr2=tgt_sr,  # Output is at 48kHz (model's native rate)
             rate=rms_mix_rate,
         )
     else:
         audio_out = audio_opt_array
-    
+
     # Resample to target sample rate if different from model's output
-    if sample_rate != tgt_sr:
-        logger.info(f"Resampling output from {tgt_sr}Hz to {sample_rate}Hz...")
-        audio_out = resample_audio(
-            audio=audio_out, orig_sr=tgt_sr, target_sr=sample_rate
-        )
-    
+    # if sample_rate != tgt_sr:
+    #     logger.info(f"Resampling output from {tgt_sr}Hz to {sample_rate}Hz...")
+    #     audio_out = resample_audio(
+    #         audio=audio_out, orig_sr=tgt_sr, target_sr=sample_rate
+    #     )
+    if tgt_sr != resample_sr >= 16000:
+        audio_out = librosa.resample(audio_out, orig_sr=tgt_sr, target_sr=resample_sr)
+
     audio_max = np.abs(audio_out).max() / 0.99
-    max_int16 = 32767
-    if audio_max > 1.0:
+    max_int16 = 32768
+    if audio_max > 1:
         max_int16 /= audio_max
     audio_int: NDArray[np.int16] = (audio_out * max_int16).astype(np.int16)
+    
+    # Save final output audio for debugging
+    np.save("debug_final_output_audio.npy", audio_int, allow_pickle=False)
     # Do GC
     from gc import collect
+
     collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
