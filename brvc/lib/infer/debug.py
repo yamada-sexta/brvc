@@ -47,7 +47,7 @@ def load_and_compare(filepath1: str, filepath2: str):
         actual_arr1 = np.load(filepath1)
         actual_arr2 = np.load(filepath2)
         
-        print(f"Loaded arrays from:\n  {filepath1}\n  {filepath2}")
+        print(f"=============\nLoaded arrays from:\n  {filepath1}\n  {filepath2}")
 
         # Perform comparison
         message, difference_sum = compare_arrays(actual_arr1, actual_arr2)

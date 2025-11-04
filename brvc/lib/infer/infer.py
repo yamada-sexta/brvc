@@ -27,6 +27,7 @@ if res is None:
 if len(res) != 2:
     raise ValueError("High-pass filter coefficients should be a tuple of (b, a).")
 bh, ah = res
+print(f"High-pass filter coefficients:\nb: {bh}\na: {ah}")
 
 
 def change_rms(
@@ -57,10 +58,10 @@ def change_rms(
 
 
 def resample_audio(
-    audio: NDArray[np.int16],
+    audio: NDArray,
     orig_sr: int,
     target_sr: int,
-) -> NDArray[np.int16]:
+) -> NDArray:
     # Check if the audio is stereo and downmix to mono
     if audio.ndim > 1 and audio.shape[1] > 1:
         # print("Detected stereo audio, downmixing to mono.")
@@ -98,47 +99,73 @@ def interface_cli(
     from accelerate import Accelerator
     import torch
     import soundfile as sf
-
+    import av
+    target_processing_sr = 16000
     logger.info("Starting inference...")
     accelerator = Accelerator()
     device = accelerator.device
 
     logger.info(f"Loading audio from {audio}...")
-    # Load at 16kHz for processing, will be upsampled to target SR later
-    # audio_data = load_audio(audio, resample_rate=16000)
-    # Read audio directly as numpy array
-    audio_data, original_sr = sf.read(audio)
-    # Print out what data was loaded
-    print(f"Loaded audio dtype: {audio_data.dtype}, shape: {audio_data.shape}, original_sr: {original_sr}")
-    # Convert it to int16
-    audio_data = audio_data.astype(np.int16)
+
+    audio_data, original_sr = sf.read(str(audio), dtype="float32")
+    logger.info(
+        f"Loaded audio dtype: {audio_data.dtype}, shape: {audio_data.shape}, original_sr: {original_sr}"
+    )
+
+    # ensure we have a 1-D mono signal: if multi-channel, convert to mono by averaging channels
+    if audio_data.ndim == 2:
+        # averaging channels is the simplest and usually acceptable approach
+        logger.info(
+            f"Input has {audio_data.shape[1]} channels — converting to mono by averaging."
+        )
+        audio_data = np.mean(audio_data, axis=1)
+
+    # At this point audio_data should be float32 in approximately -1..1 range.
+    # If it's outside that range (some files store int16 but requested as float),
+    # we normalize by the max absolute value to avoid clipping.
+    max_abs = float(np.abs(audio_data).max()) if audio_data.size else 0.0
+    if max_abs == 0.0:
+        logger.warning("Loaded audio is silence (all zeros).")
+    elif max_abs > 1.0:
+        logger.info(f"Audio samples outside [-1,1]. Normalizing by factor {max_abs}.")
+        audio_data = (audio_data / max_abs).astype(np.float32)
+    else:
+        # ensure dtype is float32
+        audio_data = audio_data.astype(np.float32)
     # Save the audio data to check if loading is correct
     np.save("debug_loaded_audio.npy", audio_data, allow_pickle=False)
-    if original_sr != 16000:
-        logger.info(
-            f"Resampling audio from original SR {original_sr}Hz to 16kHz for processing..."
-        )
-        audio_data = resample_audio(audio_data, orig_sr=original_sr, target_sr=16000)
     
-    audio_max = np.abs(audio_data).max() / 0.95
-    if audio_max > 1.0:
-        print(f"Normalizing audio by factor {audio_max} to prevent clipping.")
-        audio_data /= audio_max
+        # Resample to the model's processing SR (if needed).
+    if original_sr != target_processing_sr:
+        logger.info(f"Resampling audio from {original_sr} Hz -> {target_processing_sr} Hz for processing...")
+        # Preferably use your project's resample_audio helper if available
+        # try:
+            # if resample_audio is defined/importable in your codebase, use it
+        audio_data = resample_audio(audio_data, orig_sr=original_sr, target_sr=target_processing_sr)
+        # except NameError:
+        #     # resample_audio not defined in this scope — use fallback
+        #     audio_data = fallback_resample(audio_data, orig_sr=original_sr, target_sr=target_processing_sr)
+        # except Exception as e:
+        #     logger.exception("Resampling failed.")
+        #     raise
+        
+    post_max = float(np.abs(audio_data).max()) if audio_data.size else 0.0
+    if post_max > 1.0:
+        logger.info(f"Post-resample peak {post_max} > 1. Normalizing to avoid clipping.")
+        audio_data /= post_max
     times = [0.0, 0.0, 0.0]
     
-
     logger.info("Loading synthesis model...")
 
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 
-    m = default_config["model"]
     filter_length = ConfigV2.Data.filter_length
     hop_length = ConfigV2.Data.hop_length
-    M = ConfigV2.Model
+    M = ConfigV2.Model    
 
     net_g = SynthesizerTrnMsNSFsid(
         spec_channels=filter_length // 2 + 1,
-        segment_size=ConfigV2.Train.segment_size // hop_length,
+        segment_size=32,
         inter_channels=M.inter_channels,
         hidden_channels=M.hidden_channels,
         filter_channels=M.filter_channels,
@@ -159,6 +186,10 @@ def interface_cli(
         lrelu_slope=0.1,
         txt_channels=768,
     )
+    
+    print(f"Spectrum channels: {filter_length // 2 + 1}")
+    print(f"Segment size: {ConfigV2.Train.segment_size // hop_length}")
+    print(f"Hop length: {hop_length}")
 
     cpt = torch.load(g_path, map_location="cpu")
     if load_mode == "rvc":
@@ -189,7 +220,7 @@ def interface_cli(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Save output audio at the target sample rate
-    
+
     sf.write(output, audio_out, samplerate=sample_rate, subtype="PCM_16")
 
     # logger.info("Inference complete!")
@@ -249,7 +280,7 @@ def process_chunk(
     # Save interpolated feats as npy for debugging
     feats_interp_np: NDArray[np.float32] = feats.squeeze(0).float().cpu().numpy()
     np.save("debug_feats_interp.npy", feats_interp_np, allow_pickle=False)
-    
+
     t1 = time()
 
     p_len = audio.shape[0] // window
@@ -293,7 +324,7 @@ def process_chunk(
         torch.cuda.empty_cache()
     times[0] += t1 - t0
     times[1] += t2 - t1
-    
+
     # save converted audio for debugging
     np.save("debug_converted_audio.npy", converted_audio, allow_pickle=False)
     return converted_audio
@@ -331,7 +362,7 @@ def get_f0(
     f0 = f0_extractor.extract_pitch(x, p_len=p_len)
 
     f0 *= pow(2, f0_up_key / 12)
-    
+
     tf0 = sr // window
     f0bak = f0.copy()
     f0_mel_min = 1127 * np.log(1 + f0_min / 700)
@@ -343,7 +374,7 @@ def get_f0(
     f0_mel[f0_mel <= 1] = 1
     f0_mel[f0_mel > 255] = 255
     f0_coarse = np.rint(f0_mel).astype(np.int32)
-    
+
     # Save for debugging
     np.save("debug_f0bak.npy", f0bak)
     np.save("debug_f0_coarse.npy", f0_coarse)
@@ -356,7 +387,7 @@ def get_f0(
 # Pipeline initialized with {"x_pad": 3, "x_query": 10, "x_center": 60, "x_max": 65, "is_half": true, "t_pad": 48000, "t_pad_tgt": 144000, "t_pad2": 96000, "t_query": 160000, "t_center": 960000, "t_max": 1040000}
 def inference(
     net_g: "SynthesizerTrnMsNSFsid",
-    audio: NDArray[np.int16],
+    audio: NDArray[np.float32],
     accelerator: "Accelerator",
     f0_offset: int = 0,
     protect: float = 0.33,
@@ -403,9 +434,13 @@ def inference(
     }
     logger.info(f"Debug Info: {json.dumps(debug_info, indent=2)}")
     audio = signal.filtfilt(bh, ah, audio)
-    
     # Save audio after filtering for debugging
     np.save("debug_filtered_audio.npy", audio, allow_pickle=False)
+
+    # Also write the filtered audio to a WAV file for listening
+    import soundfile as sf
+
+    sf.write("debug_filtered_audio.wav", audio, samplerate=sr)
     audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
     opt_ts: list[int] = []
     if audio_pad.shape[0] < t_max:
@@ -484,7 +519,7 @@ def inference(
     )
 
     audio_opt_array: NDArray[np.float32] = np.concatenate(audio_opt)
-    
+
     # save for debugging
     np.save("debug_audio_opt_array.npy", audio_opt_array, allow_pickle=False)
 
@@ -513,7 +548,7 @@ def inference(
     if audio_max > 1:
         max_int16 /= audio_max
     audio_int: NDArray[np.int16] = (audio_out * max_int16).astype(np.int16)
-    
+
     # Save final output audio for debugging
     np.save("debug_final_output_audio.npy", audio_int, allow_pickle=False)
     # Do GC
