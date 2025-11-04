@@ -35,7 +35,9 @@ def extract_feature(
     wav, sr = sf.read(file)
     assert sr == 16000, f"Expected 16kHz, got {sr}Hz"
     if wav.ndim == 2:
-        wav = wav.mean(-1)
+        wav = wav.mean(-1)  # Convert to mono
+    # Make sure the waveform is 1D
+    assert wav.ndim == 1, f"Expected 1D waveform, got {wav.ndim}D"
 
     inputs = extractor(wav, sampling_rate=16000, return_tensors="pt")
     inputs = {k: v.to(accelerator.device) for k, v in inputs.items()}
@@ -55,16 +57,21 @@ def extract_features(
     accelerator: Accelerator = Accelerator(),
 ):
     """Extract HuBERT features for all files in the dataset."""
+
     model, extractor = get_hf_hubert_model()
     model.eval()
     model.to(accelerator.device)
+
     wav_dir = exp_dir / RESAMPLED_16K_DIR
     out_dir = exp_dir / HUBERT_DIR
+
     out_dir.mkdir(parents=True, exist_ok=True)
     wav_files = sorted(wav_dir.glob("*.wav"))
+
     if not wav_files:
         logger.warning("No .wav files found to process.")
         return
+
     logger.info(f"Processing {len(wav_files)} files...")
     for file in tqdm(
         wav_files,
@@ -80,6 +87,9 @@ def extract_features(
             extract_feature(file, out_file, model, extractor, accelerator)
         except Exception:
             logger.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
+    
+    accelerator.wait_for_everyone()
+    
     logger.info("[DONE] Feature extraction completed successfully.")
 
 
