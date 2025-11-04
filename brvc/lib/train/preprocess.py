@@ -173,7 +173,7 @@ def preprocess_dataset(
     gt_wavs_dir.mkdir(parents=True, exist_ok=True)
     wavs16k_dir.mkdir(parents=True, exist_ok=True)
 
-    audio_exts = {".wav", ".flac", ".mp3", ".ogg"}
+    audio_exts = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
     if recursive:
         files = [p for p in audio_dir.rglob("*") if p.suffix.lower() in audio_exts]
     else:

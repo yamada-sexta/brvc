@@ -13,3 +13,4 @@ __pycache__
 experiments/data/D_240.pth
 /experiments
 *.mp3
+.DS_Store

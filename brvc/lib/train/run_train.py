@@ -21,7 +21,6 @@ def run_training_cli(
         save_every_epoch=save_every_epoch,
         epochs=epochs,
         load_pretrain=load_pretrain,
-        # accelerator=Accelerator(),
     )
 
 

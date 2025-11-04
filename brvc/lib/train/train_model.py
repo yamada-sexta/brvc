@@ -122,7 +122,7 @@ def train_model(
 
     # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
-        audiopaths_and_text=train_files,
+        audio_and_text_path=train_files,
         max_wav_value=max_wav_value,
         sampling_rate=sample_rate,
         filter_length=filter_length,
