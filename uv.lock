@@ -12,12 +12,6 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform == 'darwin'",
 ]
 
-[manifest]
-members = [
-    "brvc",
-    "utils",
-]
-
 [[package]]
 name = "accelerate"
 version = "1.11.0"
@@ -3041,17 +3035,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/c2/51/32da03cf19d17d46c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/65/0c/cc6644eaa594585e5875f46f3c83ee8762b647b51fc5b0fb253a242df2dc/urllib3-1.26.13-py2.py3-none-any.whl", hash = "sha256:47cc05d99aaa09c9e72ed5809b60e7ba354e64b59c9c173ac3018642d8bb41fc", size = 140572, upload-time = "2022-11-23T22:34:29.785Z" },
 ]
-
-[[package]]
-name = "utils"
-version = "0.1.0"
-source = { virtual = "brvc/utils" }
-dependencies = [
-    { name = "fairseq" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "fairseq", git = "https://github.com/yamada-sexta/fairseq.git" }]
 
 [[package]]
 name = "uvicorn"
