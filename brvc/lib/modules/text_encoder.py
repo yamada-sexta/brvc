@@ -52,6 +52,11 @@ class TextEncoder(nn.Module):
         lengths: torch.Tensor,
         skip_head: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        print(f"Phone tensor stats: min={phone.min()}, max={phone.max()}, shape={phone.shape}")
+        print(f"Pitch tensor stats: min={pitch.min()}, max={pitch.max()}, shape={pitch.shape}")
+        print(f"Phone embedding layer: {self.emb_phone}")
+        print(f"Pitch embedding layer: {self.emb_pitch}")
+
         if pitch == None:
             x = self.emb_phone(phone)
         else:

@@ -34,13 +34,13 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         min_text_len: int,  # e.g. 1
     ):
         if isinstance(audio_and_text_path, (str, Path)):
-            # Load from file, assuming it's CSV with 4 columns
+            # Load from file, assuming it's CSV with 3 columns
             self.audio_and_text_path = []
             with open(audio_and_text_path, newline="", encoding="utf-8") as csvfile:
                 reader = csv.reader(csvfile)
                 for row in reader:
                     if len(row) != 3:
-                        raise ValueError("Each row must have exactly 4 columns.")
+                        raise ValueError("Each row must have exactly 3 columns.")
                     self.audio_and_text_path.append(
                         (Path(row[0]), Path(row[1]), Path(row[2]))
                     )
@@ -59,6 +59,10 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         self.sampling_rate = sampling_rate
         self.min_text_len = min_text_len
         self.max_text_len = max_text_len
+        
+        logger.info(
+            f"Loaded {len(self.audio_and_text_path)} audio-text pairs before filtering."
+        )
         self._filter()
 
     def _filter(self) -> None:
@@ -67,10 +71,27 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         """
         audiopaths_and_text_new: list[tuple[Path, Path, Path]] = []
         lengths: list[int] = []
-        for audiopath, text, pitch in self.audio_and_text_path:
-            if self.min_text_len <= len(text) and len(text) <= self.max_text_len:
-                audiopaths_and_text_new.append((audiopath, text, pitch))
-                lengths.append(os.path.getsize(audiopath) // (3 * self.hop_length))
+        for audiopath, phone_path, pitch_path in self.audio_and_text_path:
+            # phone_path is expected to be a .safetensors file containing 'feats'
+            try:
+                phone_dict = safetensors.torch.load_file(phone_path)
+                feats = phone_dict.get("feats")
+                if feats is None:
+                    logger.warning(f"No 'feats' key in {phone_path}, skipping")
+                    continue
+                n_frames = int(feats.shape[0])
+            except Exception as e:
+                logger.warning(f"Failed to read phone safetensors {phone_path}: {e}\n{traceback.format_exc()}")
+                continue
+
+            if self.min_text_len <= n_frames <= self.max_text_len:
+                audiopaths_and_text_new.append((audiopath, phone_path, pitch_path))
+                lengths.append(n_frames)
+            else:
+                logger.debug(
+                    f"Skipping {phone_path}: frame count {n_frames} outside [{self.min_text_len}, {self.max_text_len}]"
+                )
+
         self.audio_and_text_path = audiopaths_and_text_new
         self.lengths = lengths
 
@@ -107,17 +128,21 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
     def get_labels(
         self,
-        phone: Path,
-        pitch: Path,
-    ) -> tuple[torch.FloatTensor, torch.LongTensor, torch.FloatTensor]:
-        assert phone.suffix == ".safetensors", "Only .safetensors files are supported"
-        assert pitch.suffix == ".safetensors", "Only .safetensors files are supported"
+        phone_p: Path,
+        pitch_p: Path,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        assert phone_p.suffix == ".safetensors", "Only .safetensors files are supported"
+        assert pitch_p.suffix == ".safetensors", "Only .safetensors files are supported"
+
+        phone_dict = safetensors.torch.load_file(phone_p)
+        pitch_dict = safetensors.torch.load_file(pitch_p)
+        phone = phone_dict["feats"]
+        pitch = pitch_dict["coarse_f0"]
+        pitchf = pitch_dict["f0"]
         n_num = min(phone.shape[0], 900)  # DistributedBucketSampler
-        phone_data = safetensors.torch.load_file(phone)
-        pitch_data = safetensors.torch.load_file(pitch)
-        phone = phone_data["feats"][:n_num, :]
-        pitch = pitch_data["f0"][:n_num]
-        pitchf = pitch_data["coarse_f0"][:n_num]
+        phone = phone[:n_num, :]
+        pitch = pitch[:n_num]
+        pitchf = pitchf[:n_num]
 
         return (
             phone,
@@ -153,7 +178,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
             center=False,
         )
         spec = torch.squeeze(spec, 0)
-        safetensors.torch.save_file({"spec": spec, "audio": audio_norm}, audio_tensor)
+        safetensors.torch.save_file({"spec": spec.contiguous(), "audio": audio_norm.contiguous()}, audio_tensor)
         return spec, audio_norm
 
     def __getitem__(self, index: int) -> tuple[

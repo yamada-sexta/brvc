@@ -12,7 +12,7 @@ from lib.train.loss import discriminator_loss, feature_loss, generator_loss, kl_
 from lib.train.utils.collect import TextAudioCollateMultiNSFsid
 from lib.train.utils.dataset import TextAudioLoaderMultiNSFsid
 from lib.train.utils.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
-from lib.train.utils.save_final import save_final
+# from lib.train.utils.save_final import save_final
 from lib.utils.misc import clip_grad_value_
 from lib.utils.slice import slice_segments
 import shutil
@@ -90,7 +90,7 @@ def load_pretrained(
 
 
 def train_model(
-    train_files: Union[Path, List[Tuple[str, str, str, str, str]]],
+    train_files: Union[Path, List[Tuple[Path, Path, Path]]],
     exp_dir: Path,
     epochs: int = 200,
     # batch_size: int = 4,
@@ -107,7 +107,7 @@ def train_model(
     eps: float = 1e-9,
     betas: tuple = (0.8, 0.99),
     save_every_epoch: Optional[int] = None,
-    log_interval: int = 200,
+    # log_interval: int = 200,
     pretrain_g: Union[Path, Literal["base"], Literal["last"], None] = "base",
     pretrain_d: Union[Path, Literal["base"], Literal["last"], None] = "base",
     # is_half: bool = False,
@@ -147,7 +147,6 @@ def train_model(
     )
 
     # Models
-    m = default_config["model"]
     M = ConfigV2.Model
     net_g = SynthesizerTrnMsNSFsid(
         spec_channels=filter_length // 2 + 1,

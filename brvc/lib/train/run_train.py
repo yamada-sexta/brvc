@@ -4,6 +4,8 @@ from accelerate import Accelerator
 
 import logging
 
+from lib.train.config import F0_DIR, GT_DIR, HUBERT_DIR
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +16,7 @@ def run_training_cli(
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
 ):
-    
+
     run_training(
         audio_dir=audio_dir,
         exp_dir=exp_dir,
@@ -65,27 +67,25 @@ def run_training(
         accelerator=accelerator,
     )
 
-    train_files = []
+    train_files: list[tuple[Path, Path, Path]] = []
 
     # What we want to have is a list of tuples (audio_path, spec_path, f0_path)
-    wav_dir = exp_dir / "0_gt_wavs"
-    feature_dir = exp_dir / "3_feature768"
-    f0_dir = exp_dir / "2a_f0"
-    f0nsf_dir = exp_dir / "2b-f0nsf"
+    wav_dir = exp_dir / GT_DIR
+    feature_dir = exp_dir / HUBERT_DIR
+    f0_dir = exp_dir / F0_DIR
+    # f0nsf_dir = exp_dir / "2b-f0nsf"
     # Generate the list of files
     # Each row should be (audio_path, feature_path, f0_path, f0nsf_path, speaker_id)
     for wav_path in wav_dir.glob("*.wav"):
-        feature_path = feature_dir / wav_path.name.replace(".wav", ".npy")
-        f0_path = f0_dir / wav_path.name.replace(".wav", ".npy")
-        f0nsf_path = f0nsf_dir / wav_path.name.replace(".wav", ".npy")
-        speaker_id = "0"
+        feature_path = feature_dir / wav_path.name.replace(".wav", ".safetensors")
+        f0_path = f0_dir / wav_path.name.replace(".wav", ".safetensors")
         train_files.append(
             (
-                str(wav_path),
-                str(feature_path),
-                str(f0_path),
-                str(f0nsf_path),
-                speaker_id,
+                (wav_path),
+                (feature_path),
+                f0_path,
+                # str(f0nsf_path),
+                # speaker_id,
             )
         )
 
@@ -112,6 +112,7 @@ def main():
     )
     logger.info("Starting training process...")
     from accelerate import Accelerator
+
     tapify(run_training_cli)
 
 

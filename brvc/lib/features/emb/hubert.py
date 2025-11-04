@@ -8,14 +8,12 @@ if TYPE_CHECKING:
 import logging
 import os
 import shutil
-import transformers
 from transformers import Wav2Vec2FeatureExtractor, HubertModel
-import subprocess
 
 logger = logging.getLogger(__name__)
 
 repo_id: str = "lj1995/VoiceConversionWebUI"
-hf_model_path = "assets/hf/hubert_base"
+hf_model_path = Path("assets/hf/hubert_base")
 
 
 def download_rvc_hubert():
@@ -52,7 +50,7 @@ def convert_fairseq_to_hf_hubert():
         logger.info("Converting Fairseq HuBERT model to Hugging Face format...")
         convert_hubert_checkpoint(
             checkpoint_path=fairseq_model_path,
-            pytorch_dump_folder_path=hf_model_path,
+            pytorch_dump_folder_path=str(hf_model_path),
         )
         logger.info(f"Converted model saved to {hf_model_path}")
     else:
@@ -64,18 +62,22 @@ def convert_fairseq_to_hf_hubert():
 from transformers import HubertModel, Wav2Vec2FeatureExtractor
 
 
-def get_hf_hubert_model() -> tuple[HubertModel, Wav2Vec2FeatureExtractor]:
-    try:
-        model = HubertModel.from_pretrained("assets/hf/hubert_base")
-        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-            "assets/hf/hubert_base"
-        )
-        return model, feature_extractor
-    except Exception as e:
+def get_hf_hubert_model(
+    # accelerator: Accelerator,
+) -> tuple[HubertModel, Wav2Vec2FeatureExtractor]:
+    # Check if model exists, if not download and convert
+    if not (
+        hf_model_path.exists()
+        and (hf_model_path / "config.json").exists()
+        and (hf_model_path / "model.safetensors").exists()
+        and (hf_model_path / "preprocessor_config.json").exists()
+    ):
         download_rvc_hubert()
         convert_fairseq_to_hf_hubert()
-        model = HubertModel.from_pretrained("assets/hf/hubert_base")
-        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-            "assets/hf/hubert_base"
-        )
-        return model, feature_extractor
+
+    model = HubertModel.from_pretrained("assets/hf/hubert_base")
+    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+        "assets/hf/hubert_base"
+    )
+
+    return model, feature_extractor

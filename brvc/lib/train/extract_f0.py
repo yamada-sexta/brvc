@@ -41,8 +41,7 @@ def coarse_f0(
     ) + 1
 
     f0_mel = np.clip(f0_mel, 1, f0_bin - 1)
-    return np.rint(f0_mel).astype(int)
-
+    return np.rint(f0_mel).astype(np.int32)
 
 @torch.no_grad()
 def extract_f0_pair(
