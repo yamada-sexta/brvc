@@ -21,6 +21,8 @@ dependencies = [
     "datasets>=2.14.4",
     "protobuf>=6.33.0",
     "swift-f0>=0.1.2",
+    "safetensors>=0.6.2",
+    "numba>=0.62.1",
 ]
 [project.scripts]
 hello = "jurigged"

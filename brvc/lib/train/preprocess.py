@@ -11,24 +11,36 @@ from typing import Union
 from lib.utils.audio import load_audio
 from lib.utils.slicer import Slicer
 from pathlib import Path
+from numba import njit, jit
 
 logger = logging.getLogger(__name__)
 
-def create_muted_audio(sample_rate: int, length: Union[int, float] = 3) -> NDArray[np.float32]:
+
+@njit
+def create_muted_audio(
+    sample_rate: int, length: Union[int, float] = 3
+) -> NDArray[np.float32]:
     """Create a muted audio segment."""
     return np.zeros(int(sample_rate * length), dtype=np.float32)
 
-def normalize_audio(audio: NDArray[np.float32], max_amp: float, alpha: float) -> Optional[NDArray[np.float32]]:
+
+@njit
+def normalize_audio(
+    audio: NDArray[np.float32], max_amp: float, alpha: float
+) -> Optional[NDArray[np.float32]]:
     """Normalize audio amplitude."""
     tmp_max = np.abs(audio).max()
     if tmp_max > 2.5:
-        logger.warning(f"Skipping segment with extreme amplitude: {tmp_max}")
+        # logger.warning(f"Skipping segment with extreme amplitude: {tmp_max}")
         return None
     return (audio / tmp_max * (max_amp * alpha)) + (1 - alpha) * audio
 
 
 def save_audio(
-    audio: Optional[NDArray[np.float32]], sr: int, path: Path, resample_sr: Optional[int] = None
+    audio: Optional[NDArray[np.float32]],
+    sr: int,
+    path: Path,
+    resample_sr: Optional[int] = None,
 ) -> None:
     """Save audio at original or resampled rate."""
     if audio is None:
@@ -66,7 +78,9 @@ def process_file(
 
         # audio: NDArray[np.float32] = signal.lfilter(b, a, audio)
         # Use numpy's lfilter to avoid type issues
-        audio: NDArray[np.float32] = np.asarray(signal.lfilter(b, a, audio), dtype=np.float32)
+        audio: NDArray[np.float32] = np.asarray(
+            signal.lfilter(b, a, audio), dtype=np.float32
+        )
 
         idx1 = 0
         for sliced_audio in slicer.slice(audio):
@@ -81,6 +95,10 @@ def process_file(
                         basename = f"{idx}_{idx1}.wav"
                         save_audio(norm_audio, sr, gt_wavs_dir / basename)
                         save_audio(norm_audio, sr, wavs16k_dir / basename, 16000)
+                    else:
+                        logger.warning(
+                            f"Skipping segment {idx}_{idx1} from file {path} due to amplitude issues."
+                        )
                     idx1 += 1
                 else:
                     tmp_audio = sliced_audio[start:]
@@ -130,7 +148,7 @@ def preprocess_dataset(
         Whether to search audio files recursively.
     """
     logger.info("Starting preprocessing...")
-    
+
     if exp_dir is None:
         exp_dir = Path("experiments") / audio_dir.name
         logger.info(f"No exp_dir provided. Using default: {exp_dir}")
@@ -153,15 +171,15 @@ def preprocess_dataset(
     wavs16k_dir = exp_dir / "1_16k_wavs"
     gt_wavs_dir.mkdir(parents=True, exist_ok=True)
     wavs16k_dir.mkdir(parents=True, exist_ok=True)
-    
+
     audio_exts = {".wav", ".flac", ".mp3", ".ogg"}
     if recursive:
         files = [p for p in audio_dir.rglob("*") if p.suffix.lower() in audio_exts]
     else:
         files = [p for p in audio_dir.iterdir() if p.suffix.lower() in audio_exts]
-    
+
     files = sorted(files)
-    
+
     for idx, file in enumerate(
         tqdm(files, dynamic_ncols=True, desc="Processing audio files")
     ):
@@ -178,7 +196,7 @@ def preprocess_dataset(
             max_amp=max_amp,
             alpha=alpha,
         )
-    
+
     # Save a muted audio segment for padding or other uses
     muted = create_muted_audio(sample_rate, length=per)
     save_audio(muted, sample_rate, gt_wavs_dir / "muted.wav")
@@ -189,6 +207,7 @@ def preprocess_dataset(
 
 if __name__ == "__main__":
     from tap import tapify
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

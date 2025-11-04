@@ -2,6 +2,7 @@ import traceback
 from pathlib import Path
 from typing import List, Tuple
 import numpy as np
+import torch
 from tqdm import tqdm
 from lib.features.pitch.crepe import CRePE
 from lib.features.pitch.pitch_predictor import PitchExtractor
@@ -9,14 +10,17 @@ from lib.utils.audio import load_audio
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from torch.utils.data import DataLoader, Dataset
+from numba import njit
 
 logger = get_logger(__name__)
 
+
+@njit
 def mel_scale(f0: np.ndarray) -> np.ndarray:
     """Convert linear frequency (Hz) to Mel scale."""
     return 1127 * np.log1p(f0 / 700)
 
-
+@njit
 def coarse_f0(
     f0: np.ndarray,
     f0_bin: int = 256,
@@ -37,6 +41,7 @@ def coarse_f0(
     return np.rint(f0_mel).astype(int)
 
 
+@torch.no_grad()
 def extract_f0_pair(
     inp_path: Path,
     opt_path1: Path,
@@ -83,26 +88,17 @@ class AudioDataset(Dataset):
         return self.paths[idx]
 
 
-def extract_f0(
-    exp_dir: Path, 
-    sample_rate: int = 48000, 
-    accelerator: Accelerator = Accelerator()
-) -> None:
-    # accelerator = Accelerator()
-    device = accelerator.device
-    # logger.info(f"Using device: {device}", main_process_only=True)
+@torch.no_grad()
+def extract_f0(exp_dir: Path, accelerator: Accelerator = Accelerator()) -> None:
 
+    device = accelerator.device
     paths = collect_audio_paths(exp_dir)
     dataset = AudioDataset(paths)
     dataloader = DataLoader(dataset, batch_size=None)
     dataloader = accelerator.prepare(dataloader)
 
-    # pitch_extractor = CRePE(device=device, sample_rate=sample_rate)
-
-    # logger.info(
-    #     f"Processing {len(paths)} files using CRePE ({device})", main_process_only=True
-    # )
     from lib.features.pitch.swift import Swift
+
     pitch_extractor = Swift()
     logger.info(
         f"Processing {len(paths)} files using Swift ({device})", main_process_only=True
@@ -124,9 +120,7 @@ def extract_f0(
 def main() -> None:
     from tap import tapify
     import logging
-
     logging.basicConfig(level=logging.INFO)
-
     tapify(extract_f0)
 
 

@@ -6,6 +6,7 @@ import torch
 import os
 import numpy as np
 from numpy.typing import NDArray
+import safetensors.torch
 
 from lib.train.utils.mel_processing import spectrogram_torch
 from lib.train.utils.path import load_filepaths_and_text, load_wav_to_torch
@@ -136,10 +137,10 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
             )
         audio_norm = audio
         audio_norm = audio_norm.unsqueeze(0)
-        spec_filename = filename.replace(".wav", ".spec.pt")
+        spec_filename = filename.replace(".wav", ".spec.safetensors")
         if os.path.exists(spec_filename):
             try:
-                spec = torch.load(spec_filename, weights_only=False)
+                spec = safetensors.torch.load_file(spec_filename)["spec"]
             except Exception as e:
                 # logger.warning("%s %s", spec_filename, traceback.format_exc())
                 # logger.warning(f"Failed to load {spec_filename}, recomputing spectrogram.")
@@ -153,7 +154,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
                     center=False,
                 )
                 spec = torch.squeeze(spec, 0)
-                torch.save(spec, spec_filename, _use_new_zipfile_serialization=False)
+                safetensors.torch.save_file({"spec": spec}, spec_filename)
         else:
             spec = spectrogram_torch(
                 audio_norm,
@@ -164,7 +165,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
                 center=False,
             )
             spec = torch.squeeze(spec, 0)
-            torch.save(spec, spec_filename, _use_new_zipfile_serialization=False)
+            safetensors.torch.save_file({"spec": spec}, spec_filename)
         return spec, audio_norm
 
     def __getitem__(self, index: int) -> tuple[

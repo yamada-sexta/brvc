@@ -2,6 +2,29 @@ from pathlib import Path
 from typing import Literal, Union, Optional, TYPE_CHECKING
 from accelerate import Accelerator
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def run_training_cli(
+    audio_dir: Path,
+    exp_dir: Optional[Path] = None,
+    save_every_epoch: Optional[int] = None,
+    epochs: int = 200,
+    load_pretrain: Union[Literal["last", "base"], None] = "base",
+):
+    
+    run_training(
+        audio_dir=audio_dir,
+        exp_dir=exp_dir,
+        save_every_epoch=save_every_epoch,
+        epochs=epochs,
+        load_pretrain=load_pretrain,
+        # accelerator=Accelerator(),
+    )
+
+
 def run_training(
     audio_dir: Path,
     exp_dir: Optional[Path] = None,
@@ -34,7 +57,7 @@ def run_training(
 
     extract_f0(
         exp_dir=exp_dir,
-        sample_rate=48000,
+        # sample_rate=48000,
         accelerator=accelerator,
     )
 
@@ -81,14 +104,16 @@ def run_training(
 
 
 def main():
-    from accelerate import Accelerator
     from tap import tapify
     import logging
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-    tapify(run_training)
+    logger.info("Starting training process...")
+    from accelerate import Accelerator
+    tapify(run_training_cli)
 
 
 if __name__ == "__main__":

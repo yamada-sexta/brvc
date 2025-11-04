@@ -1,6 +1,6 @@
 import torch
 
-
+@torch.jit.script
 def discriminator_loss(
     disc_real_outputs: torch.Tensor, disc_generated_outputs: torch.Tensor
 ) -> tuple[torch.Tensor, list[float], list[float]]:
@@ -18,7 +18,7 @@ def discriminator_loss(
 
     return loss, r_losses, g_losses
 
-
+@torch.jit.script
 def kl_loss(
     z_p: torch.Tensor,
     logs_q: torch.Tensor,
