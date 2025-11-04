@@ -27,8 +27,6 @@ if res is None:
 if len(res) != 2:
     raise ValueError("High-pass filter coefficients should be a tuple of (b, a).")
 bh, ah = res
-print(f"High-pass filter coefficients:\nb: {bh}\na: {ah}")
-
 
 def interface_cli(
     g_path: Path,
@@ -69,10 +67,6 @@ def interface_cli(
         )
         audio_data = np.mean(audio_data, axis=1)
 
-    gain = 1.933333333333333  # adjust as desired, e.g., 1.1–1.5
-    audio_data *= gain
-    # At this point audio_data should be float32 in approximately -1..1 range.
-    # If it's outside that range (some files store int16 but requested as float),
     # we normalize by the max absolute value to avoid clipping.
     max_abs = float(np.abs(audio_data).max()) if audio_data.size else 0.0
     if max_abs == 0.0:
@@ -91,18 +85,9 @@ def interface_cli(
         logger.info(
             f"Resampling audio from {original_sr} Hz -> {target_processing_sr} Hz for processing..."
         )
-        # Preferably use your project's resample_audio helper if available
-        # try:
-        # if resample_audio is defined/importable in your codebase, use it
         audio_data = resample_audio(
             audio_data, orig_sr=original_sr, target_sr=target_processing_sr
         )
-        # except NameError:
-        #     # resample_audio not defined in this scope — use fallback
-        #     audio_data = fallback_resample(audio_data, orig_sr=original_sr, target_sr=target_processing_sr)
-        # except Exception as e:
-        #     logger.exception("Resampling failed.")
-        #     raise
 
     post_max = float(np.abs(audio_data).max()) if audio_data.size else 0.0
     if post_max > 1.0:
@@ -144,9 +129,6 @@ def interface_cli(
         txt_channels=768,
     )
 
-    print(f"Spectrum channels: {filter_length // 2 + 1}")
-    print(f"Segment size: {ConfigV2.Train.segment_size // hop_length}")
-    print(f"Hop length: {hop_length}")
     if g_path.suffix == ".safetensors":
         import safetensors.torch
 
@@ -396,19 +378,19 @@ def inference(
     # feature_extractor.to(device)
     # feature_extractor.eval()
 
-    debug_info = {
-        "x_pad": x_pad,
-        "x_query": x_query,
-        "x_center": x_center,
-        "x_max": x_max,
-        "t_pad": t_pad,
-        "t_pad_tgt": t_pad_tgt,
-        "t_pad2": t_pad2,
-        "t_query": t_query,
-        "t_center": t_center,
-        "t_max": t_max,
-    }
-    logger.info(f"Debug Info: {json.dumps(debug_info, indent=2)}")
+    # debug_info = {
+    #     "x_pad": x_pad,
+    #     "x_query": x_query,
+    #     "x_center": x_center,
+    #     "x_max": x_max,
+    #     "t_pad": t_pad,
+    #     "t_pad_tgt": t_pad_tgt,
+    #     "t_pad2": t_pad2,
+    #     "t_query": t_query,
+    #     "t_center": t_center,
+    #     "t_max": t_max,
+    # }
+    # logger.info(f"Debug Info: {json.dumps(debug_info, indent=2)}")
     audio = signal.filtfilt(bh, ah, audio)
     # Save audio after filtering for debugging
     np.save("debug_filtered_audio.npy", audio, allow_pickle=False)
@@ -511,13 +493,6 @@ def inference(
         )
     else:
         audio_out = audio_opt_array
-
-    # Resample to target sample rate if different from model's output
-    # if sample_rate != tgt_sr:
-    #     logger.info(f"Resampling output from {tgt_sr}Hz to {sample_rate}Hz...")
-    #     audio_out = resample_audio(
-    #         audio=audio_out, orig_sr=tgt_sr, target_sr=sample_rate
-    #     )
     if tgt_sr != resample_sr >= 16000:
         audio_out = librosa.resample(audio_out, orig_sr=tgt_sr, target_sr=resample_sr)
 
