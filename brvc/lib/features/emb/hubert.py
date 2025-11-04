@@ -126,8 +126,8 @@ def load_hubert_model(
 #     convert_fairseq_to_hf()
 from transformers import HubertModel, Wav2Vec2FeatureExtractor
 def get_hf_hubert_model():
-    model = HubertModel.from_pretrained("assets/m")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained("assets/m")
+    model = HubertModel.from_pretrained("assets/hf/hubert_base")
+    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained("assets/hf/hubert_base")
     return model, feature_extractor
 
 

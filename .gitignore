@@ -12,3 +12,4 @@ __pycache__
 *.pt
 experiments/data/D_240.pth
 /experiments
+*.mp3
