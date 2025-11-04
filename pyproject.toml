@@ -35,7 +35,9 @@ fairseq = { git = "https://github.com/yamada-sexta/fairseq.git" }
 
 [tool.uv.workspace]
 members = [
-    "brvc/utils",
+    # "brvc/utils",
+    # "brvc/utils/hubert",
+    # "hubert",
 ]
 # torch = [
 #   { index = "pytorch-cu126", marker = "sys_platform == 'linux'"},

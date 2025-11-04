@@ -109,12 +109,6 @@ from fairseq.models.hubert.hubert import HubertModel as FairseqHubertModel
 def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: HubertModel):
     unused_weights = []
     fairseq_dict = fairseq_model.state_dict()
-
-    # feature_extractor = (
-    #     # hf_model.hubert.feature_extractor
-    #     # if is_finetuned
-    #     else hf_model.feature_extractor
-    # )
     feature_extractor = hf_model.feature_extractor
 
     for name, value in fairseq_dict.items():
