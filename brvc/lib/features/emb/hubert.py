@@ -8,14 +8,24 @@ if TYPE_CHECKING:
 import logging
 import os
 import shutil
+import transformers
+from transformers import Wav2Vec2FeatureExtractor, HubertModel
 
 logger = logging.getLogger(__name__)
 
-
+repo_id: str = "lj1995/VoiceConversionWebUI"
 def load_hubert_model(
     accelerator: Accelerator,
-    model_path: Path = Path("assets/hubert/hubert_base.pt"),
+    # model_path: Path = Path("assets/hubert/hubert_base.pt"),
+    model_dir: Path = Path("assets/hubert_hf"),
+    fairseq_model_path: Path = Path("assets/hubert/hubert_base.pt"),
 ) -> tuple["HubertModel", DictConfig]:
+    config_path = model_dir / "config.json"
+    if config_path.exists():
+        logger.info(f"Found existing converted HuBERT model at {model_dir}")
+        model = HubertModel.from_pretrained(model_dir)
+        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained("facebook/hubert-base-ls960")
+
     from huggingface_hub import hf_hub_download
     from fairseq.models.hubert.hubert import HubertModel
 
@@ -61,3 +71,13 @@ def load_hubert_model(
 
     logger.info(f"Model loaded and prepared on device(s): {accelerator.device}")
     return model, saved_cfg
+
+
+def check_hubert_model_pt(model_path: Path = Path("assets/hubert/hubert_base.pt")) -> bool:
+    import torch
+
+    checkpoint = torch.load("model.pt", map_location="cpu")
+    print(type(checkpoint))
+    
+if __name__ == "__main__":
+    check_hubert_model_pt()
