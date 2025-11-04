@@ -12,7 +12,6 @@ from lib.train.loss import discriminator_loss, feature_loss, generator_loss, kl_
 from lib.train.utils.collect import TextAudioCollateMultiNSFsid
 from lib.train.utils.dataset import TextAudioLoaderMultiNSFsid
 from lib.train.utils.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
-# from lib.train.utils.save_final import save_final
 from lib.utils.misc import clip_grad_value_
 from lib.utils.slice import slice_segments
 import shutil
@@ -24,7 +23,6 @@ sys.path.append(os.path.join(now_dir))
 import torch
 from accelerate import Accelerator
 
-# from lib.train.utils.data import TextAudioCollateMultiNSFsid, TextAudioLoaderMultiNSFsid
 from torch.utils.data import DataLoader
 from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
 from lib.modules.discriminators import MultiPeriodDiscriminatorV2
@@ -90,7 +88,7 @@ def load_pretrained(
 
 
 def train_model(
-    train_files: Union[Path, List[Tuple[Path, Path, Path]]],
+    train_files: List[Tuple[Path, Path, Path]],
     exp_dir: Path,
     epochs: int = 200,
     # batch_size: int = 4,
