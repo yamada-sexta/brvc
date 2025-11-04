@@ -46,7 +46,7 @@ def run_training(
     exp_dir.mkdir(parents=True, exist_ok=True)
 
     preprocess_dataset(
-        audio_dir=audio_dir,
+        audio_collection=audio_dir,
         exp_dir=exp_dir,
         sample_rate=48000,
         per=10.0,

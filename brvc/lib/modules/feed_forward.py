@@ -3,7 +3,6 @@ from torch import nn
 import torch
 from torch.nn import functional as F
 
-
 class FeedForwardNetwork(nn.Module):
     def __init__(
         self,
