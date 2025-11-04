@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from lib.modules.wn import WN
 from lib.utils.misc import sequence_mask
-
+from torch.nn.utils.parametrizations import weight_norm
 
 class PosteriorEncoder(nn.Module):
     def __init__(
@@ -49,14 +49,14 @@ class PosteriorEncoder(nn.Module):
         z = (m + torch.randn_like(m) * torch.exp(logs)) * x_mask
         return z, m, logs, x_mask
 
-    def remove_weight_norm(self) -> None:
-        self.enc.remove_weight_norm()
+    # def remove_weight_norm(self) -> None:
+    #     self.enc.remove_weight_norm()
 
-    def __prepare_scriptable__(self) -> "PosteriorEncoder":
-        for hook in self.enc._forward_pre_hooks.values():
-            if (
-                hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
-                and hook.__class__.__name__ == "WeightNorm"
-            ):
-                torch.nn.utils.remove_weight_norm(self.enc)
-        return self
+    # def __prepare_scriptable__(self) -> "PosteriorEncoder":
+    #     for hook in self.enc._forward_pre_hooks.values():
+    #         if (
+    #             hook.__module__ == "torch.nn.utils.parametrizations.weight_norm"
+    #             and hook.__class__.__name__ == "WeightNorm"
+    #         ):
+    #             torch.nn.utils.remove_weight_norm(self.enc)
+    #     return self

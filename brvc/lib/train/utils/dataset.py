@@ -5,8 +5,6 @@ from typing import Union
 import torch
 import os
 import numpy as np
-from torch import FloatTensor
-from torch import LongTensor
 from numpy.typing import NDArray
 
 from lib.train.utils.mel_processing import spectrogram_torch
@@ -134,9 +132,6 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         audio, sampling_rate = load_wav_to_torch(filename)
         if sampling_rate != self.sampling_rate:
             raise ValueError(
-                # "{} SR doesn't match target {} SR".format(
-                #     sampling_rate, self.sampling_rate
-                # )
                 f"Sample rate mismatch: {sampling_rate}Hz doesn't match target {self.sampling_rate}Hz"
             )
         audio_norm = audio

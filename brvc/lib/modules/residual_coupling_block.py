@@ -60,16 +60,16 @@ class ResidualCouplingBlock(nn.Module):
         for i in range(self.n_flows):
             self.flows[i * 2].remove_weight_norm() # type: ignore
 
-    def __prepare_scriptable__(self) -> "ResidualCouplingBlock":
-        for i in range(self.n_flows):
-            for hook in self.flows[i * 2]._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(self.flows[i * 2])
+    # def __prepare_scriptable__(self) -> "ResidualCouplingBlock":
+    #     for i in range(self.n_flows):
+    #         for hook in self.flows[i * 2]._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(self.flows[i * 2])
 
-        return self
+    #     return self
 
 
 class ResidualCouplingLayer(nn.Module):
@@ -140,11 +140,11 @@ class ResidualCouplingLayer(nn.Module):
     def remove_weight_norm(self) -> None:
         self.enc.remove_weight_norm()
 
-    def __prepare_scriptable__(self) -> "ResidualCouplingLayer":
-        for hook in self.enc._forward_pre_hooks.values():
-            if (
-                hook.__module__ == "torch.nn.utils.weight_norm"
-                and hook.__class__.__name__ == "WeightNorm"
-            ):
-                torch.nn.utils.remove_weight_norm(self.enc)
-        return self
+    # def __prepare_scriptable__(self) -> "ResidualCouplingLayer":
+    #     for hook in self.enc._forward_pre_hooks.values():
+    #         if (
+    #             hook.__module__ == "torch.nn.utils.weight_norm"
+    #             and hook.__class__.__name__ == "WeightNorm"
+    #         ):
+    #             torch.nn.utils.remove_weight_norm(self.enc)
+    #     return self

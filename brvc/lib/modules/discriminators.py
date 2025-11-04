@@ -1,19 +1,18 @@
+from typing import Union
 import torch
 import torch.nn as nn
 
 from torch.nn import functional as F
 from torch.nn import Conv1d, Conv2d
-from torch.nn.utils import weight_norm, spectral_norm
-
+from torch.nn.utils import spectral_norm
+from torch.nn.utils.parametrizations import weight_norm
 from lib.utils.padding import get_padding
 
 
 class MultiPeriodDiscriminatorV2(nn.Module):
     def __init__(self, use_spectral_norm: bool, lrelu_slope: float) -> None:
-        # relu_slope: float = 0.1
         super(MultiPeriodDiscriminatorV2, self).__init__()
         periods = [2, 3, 5, 7, 11, 17, 23, 37]
-
         discs = [
             DiscriminatorS(use_spectral_norm=use_spectral_norm, lrelu_slope=lrelu_slope)
         ]
@@ -27,7 +26,7 @@ class MultiPeriodDiscriminatorV2(nn.Module):
             )
             for i in periods
         ]
-        self.discriminators = nn.ModuleList(discs)
+        self.discriminators: nn.ModuleList = nn.ModuleList(discs)
 
     def forward(self, y: torch.Tensor, y_hat: torch.Tensor) -> tuple[
         list[torch.Tensor],
@@ -39,11 +38,9 @@ class MultiPeriodDiscriminatorV2(nn.Module):
         y_d_gs: list[torch.Tensor] = []
         fmap_rs: list[list[torch.Tensor]] = []
         fmap_gs: list[list[torch.Tensor]] = []
-        for i, d in enumerate(self.discriminators):
+        for d in self.discriminators:
             y_d_r, fmap_r = d(y)
             y_d_g, fmap_g = d(y_hat)
-            # for j in range(len(fmap_r)):
-            #     print(i,j,y.shape,y_hat.shape,fmap_r[j].shape,fmap_g[j].shape)
             y_d_rs.append(y_d_r)
             y_d_gs.append(y_d_g)
             fmap_rs.append(fmap_r)
@@ -70,7 +67,7 @@ class DiscriminatorS(torch.nn.Module):
         self.lrelu_slope = lrelu_slope
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
-        fmap = []
+        fmap: list[torch.Tensor] = []
 
         for l in self.convs:
             x = l(x)
@@ -148,18 +145,12 @@ class DiscriminatorP(torch.nn.Module):
         )
         self.conv_post = norm_f(Conv2d(1024, 1, (3, 1), 1, padding=(1, 0)))
 
-    def forward(self, x):
-        fmap = []
-
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        fmap: list[torch.Tensor] = []
         # 1d to 2d
         b, c, t = x.shape
         if t % self.period != 0:  # pad first
             n_pad = self.period - (t % self.period)
-            # if has_xpu and x.dtype == torch.bfloat16:
-            #     x = F.pad(x.to(dtype=torch.float16), (0, n_pad), "reflect").to(
-            #         dtype=torch.bfloat16
-            #     )
-            # else:
             x = F.pad(x, (0, n_pad), "reflect")
             t = t + n_pad
         x = x.view(b, c, t // self.period, self.period)

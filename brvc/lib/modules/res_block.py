@@ -2,7 +2,8 @@ from typing_extensions import Literal
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils import weight_norm, remove_weight_norm
+# from torch.nn.utils import weight_norm, remove_weight_norm
+from torch.nn.utils.parametrizations import weight_norm
 from typing import Optional
 from torch.nn import Conv1d
 
@@ -61,19 +62,19 @@ class ResBlock2(torch.nn.Module):
             x = x * x_mask
         return x
 
-    def remove_weight_norm(self) -> None:
-        for l in self.convs:
-            remove_weight_norm(l)
+    # def remove_weight_norm(self) -> None:
+    #     for l in self.convs:
+    #         remove_weight_norm(l)
 
-    def __prepare_scriptable__(self) -> "ResBlock2":
-        for l in self.convs:
-            for hook in l._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(l)
-        return self
+    # def __prepare_scriptable__(self) -> "ResBlock2":
+    #     for l in self.convs:
+    #         for hook in l._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(l)
+    #     return self
 
 
 class ResBlock1(torch.nn.Module):
@@ -175,25 +176,25 @@ class ResBlock1(torch.nn.Module):
             x = x * x_mask
         return x
 
-    def remove_weight_norm(self):
-        for l in self.convs1:
-            remove_weight_norm(l)
-        for l in self.convs2:
-            remove_weight_norm(l)
+    # def remove_weight_norm(self):
+    #     for l in self.convs1:
+    #         remove_weight_norm(l)
+    #     for l in self.convs2:
+    #         remove_weight_norm(l)
 
-    def __prepare_scriptable__(self):
-        for l in self.convs1:
-            for hook in l._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(l)
-        for l in self.convs2:
-            for hook in l._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(l)
-        return self
+    # def __prepare_scriptable__(self):
+    #     for l in self.convs1:
+    #         for hook in l._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(l)
+    #     for l in self.convs2:
+    #         for hook in l._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(l)
+    #     return self

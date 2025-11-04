@@ -18,7 +18,7 @@ def sequence_mask(length: torch.Tensor, max_length: Optional[int] = None) -> tor
 
 @torch.jit.script
 def fused_add_tanh_sigmoid_multiply(
-    input_a: torch.Tensor, input_b: torch.Tensor, n_channels: torch.IntTensor
+    input_a: torch.Tensor, input_b: torch.Tensor, n_channels: torch.Tensor
 ) -> torch.Tensor:
     n_channels_int = n_channels[0]
     in_act = input_a + input_b

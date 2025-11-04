@@ -17,7 +17,7 @@ class TextAudioCollateMultiNSFsid:
                 torch.Tensor,
                 torch.Tensor,
                 torch.Tensor,
-                torch.LongTensor,
+                torch.Tensor,
             ]
         ],
     ) -> tuple[

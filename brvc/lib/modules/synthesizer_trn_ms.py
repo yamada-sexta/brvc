@@ -126,31 +126,31 @@ class SynthesizerTrnMsNSFsid(nn.Module):
         if hasattr(self, "enc_q"):
             self.enc_q.remove_weight_norm()
 
-    def __prepare_scriptable__(self) -> "SynthesizerTrnMsNSFsid":
-        for hook in self.dec._forward_pre_hooks.values():
-            # The hook we want to remove is an instance of WeightNorm class, so
-            # normally we would do `if isinstance(...)` but this class is not accessible
-            # because of shadowing, so we check the module name directly.
-            # https://github.com/pytorch/pytorch/blob/be0ca00c5ce260eb5bcec3237357f7a30cc08983/torch/nn/utils/__init__.py#L3
-            if (
-                hook.__module__ == "torch.nn.utils.weight_norm"
-                and hook.__class__.__name__ == "WeightNorm"
-            ):
-                torch.nn.utils.remove_weight_norm(self.dec)
-        for hook in self.flow._forward_pre_hooks.values():
-            if (
-                hook.__module__ == "torch.nn.utils.weight_norm"
-                and hook.__class__.__name__ == "WeightNorm"
-            ):
-                torch.nn.utils.remove_weight_norm(self.flow)
-        if hasattr(self, "enc_q"):
-            for hook in self.enc_q._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(self.enc_q)
-        return self
+    # def __prepare_scriptable__(self) -> "SynthesizerTrnMsNSFsid":
+    #     for hook in self.dec._forward_pre_hooks.values():
+    #         # The hook we want to remove is an instance of WeightNorm class, so
+    #         # normally we would do `if isinstance(...)` but this class is not accessible
+    #         # because of shadowing, so we check the module name directly.
+    #         # https://github.com/pytorch/pytorch/blob/be0ca00c5ce260eb5bcec3237357f7a30cc08983/torch/nn/utils/__init__.py#L3
+    #         if (
+    #             hook.__module__ == "torch.nn.utils.weight_norm"
+    #             and hook.__class__.__name__ == "WeightNorm"
+    #         ):
+    #             torch.nn.utils.remove_weight_norm(self.dec)
+    #     for hook in self.flow._forward_pre_hooks.values():
+    #         if (
+    #             hook.__module__ == "torch.nn.utils.weight_norm"
+    #             and hook.__class__.__name__ == "WeightNorm"
+    #         ):
+    #             torch.nn.utils.remove_weight_norm(self.flow)
+    #     if hasattr(self, "enc_q"):
+    #         for hook in self.enc_q._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(self.enc_q)
+    #     return self
 
     # @torch.jit.ignore
     def forward(

@@ -97,26 +97,26 @@ class WN(torch.nn.Module):
         for l in self.res_skip_layers:
             torch.nn.utils.remove_weight_norm(l)
 
-    def __prepare_scriptable__(self) -> "WN":
-        if self.gin_channels != 0:
-            for hook in self.cond_layer._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(self.cond_layer)
-        for l in self.in_layers:
-            for hook in l._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(l)
-        for l in self.res_skip_layers:
-            for hook in l._forward_pre_hooks.values():
-                if (
-                    hook.__module__ == "torch.nn.utils.weight_norm"
-                    and hook.__class__.__name__ == "WeightNorm"
-                ):
-                    torch.nn.utils.remove_weight_norm(l)
-        return self
+    # def __prepare_scriptable__(self) -> "WN":
+    #     if self.gin_channels != 0:
+    #         for hook in self.cond_layer._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(self.cond_layer)
+    #     for l in self.in_layers:
+    #         for hook in l._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(l)
+    #     for l in self.res_skip_layers:
+    #         for hook in l._forward_pre_hooks.values():
+    #             if (
+    #                 hook.__module__ == "torch.nn.utils.weight_norm"
+    #                 and hook.__class__.__name__ == "WeightNorm"
+    #             ):
+    #                 torch.nn.utils.remove_weight_norm(l)
+    #     return self

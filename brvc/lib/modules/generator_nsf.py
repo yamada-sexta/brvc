@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import ConvTranspose1d, Conv1d
-from torch.nn.utils import weight_norm, remove_weight_norm
+# from torch.nn.utils import weight_norm, remove_weight_norm
+from torch.nn.utils.parametrizations import weight_norm
 from lib.modules.source_module_hn_nsf import SourceModuleHnNSF
 from lib.modules.res_block import RES_BLOCK_VERSION, ResBlock1, ResBlock2
 from lib.utils.misc import init_weights
@@ -23,7 +24,6 @@ class GeneratorNSF(nn.Module):
         upsample_kernel_sizes: list[int],
         gin_channels: int,
         sr: int,
-        # is_half: bool,
         lrelu_slope: float,
     ):
         super(GeneratorNSF, self).__init__()
@@ -53,7 +53,7 @@ class GeneratorNSF(nn.Module):
             res_block = resblock
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
-            c_prev: int = upsample_initial_channel // (2**i)
+            # c_prev: int = upsample_initial_channel // (2**i)
             c_cur: int = upsample_initial_channel // (2 ** (i + 1))
             self.ups.append(
                 weight_norm(
@@ -118,7 +118,7 @@ class GeneratorNSF(nn.Module):
         f0: torch.Tensor,
         g: Optional[torch.Tensor] = None,
         n_res: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         har_source, noi_source, uv = self.m_source(f0, self.upp)
         har_source = har_source.transpose(1, 2)
         if n_res is not None:
@@ -158,11 +158,11 @@ class GeneratorNSF(nn.Module):
         
         return x
 
-    def remove_weight_norm(self):
-        for l in self.ups:
-            remove_weight_norm(l)
-        for l in self.resblocks:
-            if isinstance(l, torch.Tensor):
-                continue
-            else:
-                l.remove_weight_norm()  # type: ignore
+    # def remove_weight_norm(self):
+    #     for l in self.ups:
+    #         remove_weight_norm(l)
+    #     for l in self.resblocks:
+    #         if isinstance(l, torch.Tensor):
+    #             continue
+    #         else:
+    #             l.remove_weight_norm()  # type: ignore
