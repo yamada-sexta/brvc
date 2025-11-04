@@ -60,3 +60,35 @@ load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_feats.npy', '/mnt/d/repos/r
 load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_feats_interp.npy', '/mnt/d/repos/rvc-webgui-fork/debug_feats_interp.npy')
 load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_audio_opt_array.npy', '/mnt/d/repos/rvc-webgui-fork/debug_audio_opt_array.npy')
 load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_final_output_audio.npy', '/mnt/d/repos/rvc-webgui-fork/debug_final_output_audio.npy')
+
+# Load wavs for audio comparison
+import soundfile as sf
+def load_wav_and_compare(filepath1: str, filepath2: str):
+    """Loads wav files from file paths and compares them."""
+    try:
+        # Check if files exist (optional but good practice)
+        if not os.path.exists(filepath1):
+            print(f"Error: File not found at {filepath1}")
+            return
+        if not os.path.exists(filepath2):
+            print(f"Error: File not found at {filepath2}")
+            return
+
+        # Load the wav files
+        actual_wav1, sr1 = sf.read(filepath1)
+        actual_wav2, sr2 = sf.read(filepath2)
+
+        if sr1 != sr2:
+            print(f"Sample rates differ: {sr1} vs {sr2}. Cannot compare audio.")
+            return
+
+        # Perform comparison
+        message, difference_sum = compare_arrays(actual_wav1, actual_wav2)
+        print(message)
+        if difference_sum is not None:
+            print(f"Actual Sum of Absolute Differences: {difference_sum:.4f}")
+
+    except Exception as e:
+        print(f"An error occurred during file loading or comparison: {e}")
+
+load_wav_and_compare('/mnt/d/repos/rvc-webgui-fork/ttt_out.wav', '/mnt/d/repos/rvc-webgui-fork/ttt_out.wav')
