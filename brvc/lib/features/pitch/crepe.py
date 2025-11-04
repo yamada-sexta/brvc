@@ -17,7 +17,7 @@ class CRePE(PitchExtractor):
         f0_min: int = 50,
         f0_max: int = 1100,
     ):
-        super().__init__(sample_rate, window_size, f0_min, f0_max)
+        super().__init__()
         self.device = device
 
     def extract_pitch(

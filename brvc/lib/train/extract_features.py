@@ -18,48 +18,61 @@ from accelerate.logging import get_logger
 
 from typing import TYPE_CHECKING
 
-from lib.features.emb.hubert import load_hubert_model
+from lib.features.emb.hubert import get_hf_hubert_model
 
 
 logger = get_logger(__name__)
 
 
-def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
-    """Load a mono 16kHz waveform and optionally normalize."""
-    wav, sr = sf.read(path)
-    assert sr == 16000, f"Expected 16kHz, got {sr}Hz"
-    feats = torch.from_numpy(wav).float()
-    if feats.ndim == 2:
-        feats = feats.mean(-1)
-    if normalize:
-        with torch.no_grad():
-            feats = F.layer_norm(feats, feats.shape)
-    return feats.view(1, -1)
+# def read_wave(path: Path, normalize: bool = False) -> torch.Tensor:
+#     """Load a mono 16kHz waveform and optionally normalize."""
+#     wav, sr = sf.read(path)
+#     assert sr == 16000, f"Expected 16kHz, got {sr}Hz"
+#     feats = torch.from_numpy(wav).float()
+#     if feats.ndim == 2:
+#         feats = feats.mean(-1)
+#     if normalize:
+#         with torch.no_grad():
+#             feats = F.layer_norm(feats, feats.shape)
+#     return feats.view(1, -1)
 
 
+
+if TYPE_CHECKING:
+    from transformers import Wav2Vec2FeatureExtractor, HubertModel
 def extract_feature(
     file: Path,
     out_file: Path,
-    model,
-    saved_cfg: DictConfig,
+    model: "HubertModel",
+    # saved_cfg: Wav,
+    extractor: "Wav2Vec2FeatureExtractor",
     accelerator: Accelerator,
-    version: str,
+    # version: str,
 ):
     """Extract HuBERT features for a single file."""
-    wav: torch.Tensor = read_wave(file, normalize=saved_cfg.task.normalize)
-    padding_mask = torch.BoolTensor(wav.shape).fill_(False)
+    # wav: torch.Tensor = read_wave(file, normalize=False)
+    wav, sr = sf.read(file)
+    assert sr == 16000, f"Expected 16kHz, got {sr}Hz"
+    if wav.ndim == 2:
+        wav = wav.mean(-1)
+        
+    # padding_mask = torch.BoolTensor(wav.shape).fill_(False)
 
-    inputs = {
-        "source": wav.to(accelerator.device),
-        "padding_mask": padding_mask.to(accelerator.device),
-        "output_layer": 9 if version == "v1" else 12,
-    }
+    # inputs = {
+    #     "source": wav.to(accelerator.device),
+    #     "padding_mask": padding_mask.to(accelerator.device),
+    #     "output_layer": 9 if version == "v1" else 12,
+    # }
 
     with torch.no_grad():
-        logits = model.extract_features(**inputs)
-        feats_tensor: torch.Tensor = (
-            model.final_proj(logits[0]) if version == "v1" else logits[0]
-        )
+        inputs = extractor(wav, sampling_rate=16000, return_tensors="pt")
+        inputs = {k: v.to(accelerator.device) for k, v in inputs.items()}
+        # logits = model.extract_features(**inputs)
+        # feats_tensor: torch.Tensor = (
+            # model.final_proj(logits[0]) if version == "v1" else logits[0]
+        # )
+        outputs = model(**inputs)
+        feats_tensor = outputs.last_hidden_state
 
     feats = feats_tensor.squeeze(0).float().cpu().numpy()
     if not np.isnan(feats).any():
@@ -70,8 +83,9 @@ def extract_feature(
 
 def extract_features(
     exp_dir: Path,
+    accelerator: Accelerator = Accelerator(),
     # output_dir: Path,
-    version: Literal["v1", "v2"] = "v2",
+    # version: Literal["v1", "v2"] = "v2",
     # is_half: bool = False,
     # model_path: Path = Path("assets/hubert/hubert_base.pt"),
 ):
@@ -91,10 +105,13 @@ def extract_features(
         Path to the HuBERT model checkpoint, by default "assets/hubert/hubert_base.pt".
     """
     # Initialize accelerator for multi-GPU, mixed precision, etc.
-    accelerator = Accelerator()
+    # accelerator = Accelerator()
     logger.info(f"Using device: {accelerator.device}")
 
-    model, saved_cfg = load_hubert_model(accelerator)
+    model, extractor = get_hf_hubert_model()
+    # model = accelerator.prepare(model)
+    model.eval()
+    model.to(accelerator.device)
 
     wav_dir = exp_dir / "1_16k_wavs"
     # out_dir = Path(output_dir)
@@ -120,7 +137,7 @@ def extract_features(
             out_file = out_dir / file.with_suffix(".npy").name
             if out_file.exists():
                 continue
-            extract_feature(file, out_file, model, saved_cfg, accelerator, version)
+            extract_feature(file, out_file, model, extractor, accelerator)
         except Exception:
             logger.error(f"Error processing {file.name}:\n{traceback.format_exc()}")
 

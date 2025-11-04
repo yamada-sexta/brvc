@@ -141,12 +141,18 @@ import numpy as np
 
 class PitchExtractor(ABC):
     """Abstract base class for all pitch extraction methods."""
+    
+    sr: int = 16000
+    window: int = 160
+    f0_min: int = 50
+    f0_max: int = 1100
 
-    def __init__(self, sample_rate: int, window_size: int, f0_min: int, f0_max: int):
-        self.sr = sample_rate
-        self.window = window_size
-        self.f0_min = f0_min
-        self.f0_max = f0_max
+    def __init__(self):
+        # self.sr = sample_rate
+        # self.window = window_size
+        # self.f0_min = f0_min
+        # self.f0_max = f0_max
+        pass
     
     @abstractmethod
     def extract_pitch(self, audio: NDArray[np.float32]) -> NDArray[np.float32]:

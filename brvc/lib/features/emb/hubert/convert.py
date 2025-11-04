@@ -17,6 +17,7 @@
 import argparse
 import json
 import os
+from typing import Optional
 
 import fairseq
 import torch
@@ -28,6 +29,7 @@ from transformers import (
     HubertModel,
     Wav2Vec2CTCTokenizer,
     Wav2Vec2FeatureExtractor,
+    HubertForSequenceClassification,
     Wav2Vec2Processor,
     logging,
 )
@@ -55,7 +57,7 @@ MAPPING = {
 }
 
 
-def set_recursively(hf_pointer, key, value, full_name, weight_type):
+def set_recursively(hf_pointer, key: str, value: torch.Tensor, full_name: str, weight_type: Optional[str]):
     # 1. Navigate to the target module/tensor
     for attribute in key.split("."):
         hf_pointer = getattr(hf_pointer, attribute)
@@ -103,19 +105,28 @@ def set_recursively(hf_pointer, key, value, full_name, weight_type):
         f"{key + '.' + weight_type if weight_type is not None else ''} was initialized from {full_name}."
     )
 
-
-def recursively_load_weights(fairseq_model, hf_model, is_finetuned):
+from fairseq.models.hubert.hubert import HubertModel as FairseqHubertModel
+def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: HubertModel):
     unused_weights = []
     fairseq_dict = fairseq_model.state_dict()
 
-    feature_extractor = (
-        hf_model.hubert.feature_extractor
-        if is_finetuned
-        else hf_model.feature_extractor
-    )
+    # feature_extractor = (
+    #     # hf_model.hubert.feature_extractor
+    #     # if is_finetuned
+    #     else hf_model.feature_extractor
+    # )
+    feature_extractor = hf_model.feature_extractor
 
     for name, value in fairseq_dict.items():
+        logger.info(f"Processing {name}...")
         is_used = False
+        
+        # Skip training-specific weights that don't exist in the base HuBERT model
+        if name in ["label_embs_concat", "final_proj.weight", "final_proj.bias"]:
+            logger.info(f"Skipping training-specific weight: {name}")
+            unused_weights.append(name)
+            continue
+        
         if "conv_layers" in name:
             load_conv_layer(
                 name,
@@ -127,15 +138,16 @@ def recursively_load_weights(fairseq_model, hf_model, is_finetuned):
             is_used = True
         else:
             for key, mapped_key in MAPPING.items():
-                mapped_key = (
-                    "hubert." + mapped_key
-                    if (is_finetuned and mapped_key != "lm_head")
-                    else mapped_key
-                )
+                # mapped_key = (
+                #     "hubert." + mapped_key
+                #     if (is_finetuned and mapped_key != "lm_head")
+                #     else mapped_key
+                # )
+                
 
                 if key in name or (
                     key.split("w2v_model.")[-1] == name.split(".")[0]
-                    and not is_finetuned
+                    # and not is_finetuned
                 ):
                     is_used = True
                     if "*" in mapped_key:
@@ -231,81 +243,45 @@ def load_conv_layer(
 
 @torch.no_grad()
 def convert_hubert_checkpoint(
-    checkpoint_path,
-    pytorch_dump_folder_path,
-    config_path=None,
-    dict_path=None,
-    is_finetuned=False,
+    checkpoint_path: str,
+    pytorch_dump_folder_path: str,
+    config_path: Optional[str] = None,
+    dict_path: Optional[str] = None,
+    # is_finetuned=False,
 ):
     """
     Copy/paste/tweak model's weights to transformers design.
     """
     from fairseq import checkpoint_utils
+    model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task([checkpoint_path])
 
     if config_path is not None:
         config = HubertConfig.from_pretrained(config_path)
     else:
-        config = HubertConfig()
-
-    if is_finetuned:
-        if dict_path:
-            target_dict = Dictionary.load(dict_path)
-
-            # important change bos & pad token id since CTC symbol is <pad> and
-            # not <s> as in fairseq
-            config.bos_token_id = target_dict.pad_index
-            config.pad_token_id = target_dict.bos_index
-            config.eos_token_id = target_dict.eos_index
-            config.vocab_size = len(target_dict.symbols)
-            vocab_path = os.path.join(pytorch_dump_folder_path, "vocab.json")
-            if not os.path.isdir(pytorch_dump_folder_path):
-                logger.error(
-                    f"--pytorch_dump_folder_path ({pytorch_dump_folder_path}) should be a directory"
-                )
-                return
-            os.makedirs(pytorch_dump_folder_path, exist_ok=True)
-            with open(vocab_path, "w", encoding="utf-8") as vocab_handle:
-                json.dump(target_dict.indices, vocab_handle)
-            tokenizer = Wav2Vec2CTCTokenizer(
-                vocab_path,
-                unk_token=target_dict.unk_word,
-                pad_token=target_dict.pad_word,
-                bos_token=target_dict.bos_word,
-                eos_token=target_dict.eos_word,
-                word_delimiter_token="|",
-                do_lower_case=False,
-            )
-            return_attention_mask = config.feat_extract_norm == "layer"
-            feature_extractor = Wav2Vec2FeatureExtractor(
-                feature_size=1,
-                sampling_rate=16000,
-                padding_value=0,
-                do_normalize=True,
-                return_attention_mask=return_attention_mask,
-            )
-            processor = Wav2Vec2Processor(
-                feature_extractor=feature_extractor, tokenizer=tokenizer
-            )
-            processor.save_pretrained(pytorch_dump_folder_path)
-
-        hf_wav2vec = HubertForCTC(config)
-    else:
-        hf_wav2vec = HubertModel(config)
-
-    if is_finetuned:
-        model, _, _ = checkpoint_utils.load_model_ensemble_and_task(
-            [checkpoint_path],
-            arg_overrides={"data": "/".join(dict_path.split("/")[:-1])},
+        config = HubertConfig(
+            hidden_size=saved_cfg.model.encoder_embed_dim,
+            num_hidden_layers=saved_cfg.model.encoder_layers,
+            num_attention_heads=saved_cfg.model.encoder_attention_heads,
+            intermediate_size=saved_cfg.model.encoder_ffn_embed_dim,
         )
-    else:
-        model, saved_cfg, _ = checkpoint_utils.load_model_ensemble_and_task([checkpoint_path])
-        print(saved_cfg)
+    
+    hf_wav2vec = HubertModel(config)
+    feature_extractor = Wav2Vec2FeatureExtractor(
+        feature_size=1,
+        sampling_rate=16000,
+        padding_value=0.0,
+        do_normalize=False,
+        return_attention_mask=False,
+    )
+    
+    print("Saved cfg:")
+    print(saved_cfg)
     model = model[0].eval()
 
-    recursively_load_weights(model, hf_wav2vec, is_finetuned)
+    recursively_load_weights(model, hf_wav2vec)
 
     hf_wav2vec.save_pretrained(pytorch_dump_folder_path)
-
+    feature_extractor.save_pretrained(pytorch_dump_folder_path)
 
 from fairseq.data.dictionary import Dictionary
 from torch.serialization import safe_globals
@@ -314,28 +290,28 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--pytorch_dump_folder_path",
-        default=None,
+        default="assets/hf/hubert_base",
         type=str,
         help="Path to the output PyTorch model.",
     )
     parser.add_argument(
-        "--checkpoint_path", default=None, type=str, help="Path to fairseq checkpoint"
+        "--checkpoint_path", default="assets/hubert/hubert_base.pt", type=str, help="Path to fairseq checkpoint"
     )
-    parser.add_argument(
-        "--dict_path", default=None, type=str, help="Path to dict of fine-tuned model"
-    )
-    parser.add_argument(
-        "--config_path",
-        default=None,
-        type=str,
-        help="Path to hf config.json of model to convert",
-    )
+    # parser.add_argument(
+    #     "--dict_path", default=None, type=str, help="Path to dict of fine-tuned model"
+    # )
+    # parser.add_argument(
+    #     "--config_path",
+    #     default=None,
+    #     type=str,
+    #     help="Path to hf config.json of model to convert",
+    # )
     args = parser.parse_args()
     with safe_globals([Dictionary]):
         convert_hubert_checkpoint(
             args.checkpoint_path,
             args.pytorch_dump_folder_path,
-            args.config_path,
-            args.dict_path,
+            # args.config_path,
+            # args.dict_path,
             # not args.not_finetuned,
         )

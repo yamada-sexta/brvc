@@ -19,6 +19,8 @@ dependencies = [
     "typed-argument-parser>=1.11.0",
     "fairseq",
     "datasets>=2.14.4",
+    "protobuf>=6.33.0",
+    "swift-f0>=0.1.2",
 ]
 [project.scripts]
 hello = "jurigged"

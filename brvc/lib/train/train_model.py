@@ -111,13 +111,9 @@ def train_model(
     pretrain_g: Union[Path, Literal["base"], Literal["last"], None] = "base",
     pretrain_d: Union[Path, Literal["base"], Literal["last"], None] = "base",
     # is_half: bool = False,
+    accelerator: Accelerator = Accelerator()
 ):
     """Main training function."""
-
-    # Initialize accelerator
-
-    accelerator = Accelerator()
-
     set_seed(seed)
 
     # Create model directory
@@ -264,24 +260,30 @@ def train_model(
     if pretrain_g is not None:
         logger.info(f"Loading generator pretrained from {pretrain_g}", main_process_only=True)
         load_pretrained(net_g, str(pretrain_g), accelerator)
+    else:
+        logger.info("No pretrained generator specified, training from scratch.", main_process_only=True)
     if pretrain_d is not None:
         logger.info(f"Loading discriminator pretrained from {pretrain_d}", main_process_only=True)
         load_pretrained(net_d, str(pretrain_d), accelerator)
-    
+    else:
+        logger.info("No pretrained discriminator specified, training from scratch.", main_process_only=True)
     # Training loop
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
-    for epoch in range(1, epochs + 1):
+    epoch_bar = tqdm(
+        range(1, epochs + 1),
+        disable=not accelerator.is_main_process,
+        desc=f"Epochs"
+    )
+    for epoch in epoch_bar:
         net_g.train()
         net_d.train()
-
-        loss_g = torch.tensor(0.0)
-        loss_d = torch.tensor(0.0)
 
         progress_bar = tqdm(
             train_loader,
             disable=not accelerator.is_main_process,
             desc=f"Epoch {epoch}/{epochs}",
+            leave=False
         )
 
         for batch_idx, batch in enumerate(progress_bar):

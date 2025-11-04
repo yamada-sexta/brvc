@@ -261,13 +261,13 @@ def process_chunk(
     assert feats.dim() == 1, "Input audio should be 1D."
     feats = feats.view(1, -1)
     # feats = feats.to(device)
-    padding_mask = torch.BoolTensor(feats.shape).to(device).fill_(False)
+    # padding_mask = torch.BoolTensor(feats.shape).to(device).fill_(False)
 
-    inputs = {
-        "source": feats.to(device),
-        "padding_mask": padding_mask,
-        "output_layer": 12,
-    }
+    # inputs = {
+    #     "source": feats.to(device),
+    #     "padding_mask": padding_mask,
+    #     "output_layer": 12,
+    # }
 
     t0 = time()
     with torch.no_grad():
@@ -323,7 +323,7 @@ def process_chunk(
         )
         audio1: NDArray[np.float32] = res[0][0, 0].data.cpu().float().numpy()
 
-    del feats, p_len, padding_mask
+    del feats, p_len
     t2 = time()
     # Run Garbage Collection
     from gc import collect
@@ -365,8 +365,9 @@ def get_f0(
         "f0_max": f0_max,
     }
     print(f"F0 Extraction Debug Info: {json.dumps(debug_info, indent=2)}")
-    f0_extractor = CRePE(
-        sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
+    from lib.features.pitch.swift import Swift
+    f0_extractor = Swift(
+        # sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
     )
 
     f0 = f0_extractor.extract_pitch(x)
@@ -391,10 +392,6 @@ def get_f0(
     # Should be the same as the RVC implementation
     return f0_coarse, f0bak
 
-
-# {'visible': True, 'value': 0.33, '__type__': 'update'}, {'value': '', '__type__': 'update'})
-# {"file_index": "", "index_rate": 0.75, "tgt_sr": 48000, "resample_sr": 0, "rms_mix_rate": 0.25, "version": "v2", "protect": 0.33, "f0_file": false, "window": 160, "t_max": 1040000, "t_query": 160000, "t_center": 960000, "t_pad": 48000, "t_pad2": 96000, "t_pad_tgt": 144000}
-# Pipeline initialized with {"x_pad": 3, "x_query": 10, "x_center": 60, "x_max": 65, "is_half": true, "t_pad": 48000, "t_pad_tgt": 144000, "t_pad2": 96000, "t_query": 160000, "t_center": 960000, "t_max": 1040000}
 def inference(
     net_g: "SynthesizerTrnMsNSFsid",
     audio: NDArray[np.float32],
@@ -416,9 +413,7 @@ def inference(
 ) -> NDArray[np.int16]:
 
     logger.info("Loading HuBERT model...")
-    from lib.train.extract_features import load_hubert_model
-
-    # hubert_model, _ = load_hubert_model(accelerator=accelerator)
+    from lib.train.extract_features import get_hf_hubert_model
     hubert, feature_extractor = get_hf_hubert_model()
 
     logger.info("Starting inference pipeline...")

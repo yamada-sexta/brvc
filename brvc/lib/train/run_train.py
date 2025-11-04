@@ -1,13 +1,14 @@
 from pathlib import Path
-from typing import Literal, Union, Optional
-
+from typing import Literal, Union, Optional, TYPE_CHECKING
+from accelerate import Accelerator
 
 def run_training(
     audio_dir: Path,
     exp_dir: Optional[Path] = None,
     save_every_epoch: Optional[int] = None,
     epochs: int = 200,
-    load_pretrain: Union[Literal["last", "base"], None] = None,
+    load_pretrain: Union[Literal["last", "base"], None] = "base",
+    accelerator: Accelerator = Accelerator(),
 ):
     if not audio_dir.exists():
         raise FileNotFoundError(f"Audio directory {audio_dir} does not exist.")
@@ -34,10 +35,12 @@ def run_training(
     extract_f0(
         exp_dir=exp_dir,
         sample_rate=48000,
+        accelerator=accelerator,
     )
 
     extract_features(
         exp_dir=exp_dir,
+        accelerator=accelerator,
     )
 
     train_files = []
@@ -71,14 +74,20 @@ def run_training(
         save_every_epoch=save_every_epoch,
         pretrain_d=load_pretrain,
         pretrain_g=load_pretrain,
+        accelerator=accelerator,
     )
 
     pass
 
 
 def main():
+    from accelerate import Accelerator
     from tap import tapify
-
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
     tapify(run_training)
 
 
