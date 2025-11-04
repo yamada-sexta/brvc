@@ -24,7 +24,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        audio_and_text_path: Union[str, Path, list[tuple[Path, Path, Path]]],
+        audio_and_text_path: list[tuple[Path, Path, Path]],
         max_wav_value: float,  # e.g. 32768.0
         sampling_rate: int,  # e.g. 48000
         filter_length: int,  # e.g. 2048
@@ -33,24 +33,27 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         max_text_len: int,  # e.g. 5000
         min_text_len: int,  # e.g. 1
     ):
-        if isinstance(audio_and_text_path, (str, Path)):
-            # Load from file, assuming it's CSV with 3 columns
-            self.audio_and_text_path = []
-            with open(audio_and_text_path, newline="", encoding="utf-8") as csvfile:
-                reader = csv.reader(csvfile)
-                for row in reader:
-                    if len(row) != 3:
-                        raise ValueError("Each row must have exactly 3 columns.")
-                    self.audio_and_text_path.append(
-                        (Path(row[0]), Path(row[1]), Path(row[2]))
-                    )
-        elif isinstance(audio_and_text_path, list) and all(
+        # if isinstance(audio_and_text_path, (str, Path)):
+        #     # Load from file, assuming it's CSV with 3 columns
+        #     self.audio_and_text_path = []
+        #     with open(audio_and_text_path, newline="", encoding="utf-8") as csvfile:
+        #         reader = csv.reader(csvfile)
+        #         for row in reader:
+        #             if len(row) != 3:
+        #                 raise ValueError("Each row must have exactly 3 columns.")
+        #             self.audio_and_text_path.append(
+        #                 (Path(row[0]), Path(row[1]), Path(row[2]))
+        #             )
+        #  isinstance(audio_and_text_path, list) and all(
+        #     isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path
+        # ):
+        #     self.audio_and_text_path = audio_and_text_path
+        # else:
+        #     raise ValueError("Invalid type for audio_and_text_path")
+        assert all(
             isinstance(t, tuple) and len(t) == 3 for t in audio_and_text_path
-        ):
-            self.audio_and_text_path = audio_and_text_path
-        else:
-            raise ValueError("Invalid type for audio_and_text_path")
-
+        ), "audio_and_text_path must be a list of tuples with 3 elements each"
+        self.audio_and_text_path = audio_and_text_path
         self.max_wav_value = max_wav_value
         self.sampling_rate = sampling_rate
         self.filter_length = filter_length
@@ -59,7 +62,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         self.sampling_rate = sampling_rate
         self.min_text_len = min_text_len
         self.max_text_len = max_text_len
-        
+
         logger.info(
             f"Loaded {len(self.audio_and_text_path)} audio-text pairs before filtering."
         )
@@ -94,6 +97,9 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
         self.audio_and_text_path = audiopaths_and_text_new
         self.lengths = lengths
+        logger.info(
+            f"Filtered dataset to {len(self.audio_and_text_path)} audio-text pairs after applying length constraints."
+        )
 
     def get_sid(self) -> torch.LongTensor:
         return torch.LongTensor([0])  # single speaker
@@ -136,9 +142,13 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
         phone_dict = safetensors.torch.load_file(phone_p)
         pitch_dict = safetensors.torch.load_file(pitch_p)
+
         phone = phone_dict["feats"]
         pitch = pitch_dict["coarse_f0"]
         pitchf = pitch_dict["f0"]
+
+        phone = phone.repeat_interleave(2, dim=0)
+
         n_num = min(phone.shape[0], 900)  # DistributedBucketSampler
         phone = phone[:n_num, :]
         pitch = pitch[:n_num]
@@ -149,7 +159,6 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
             pitch,
             pitchf,
         )
-
     def get_audio(self, filename: Path) -> tuple[torch.Tensor, torch.Tensor]:
         assert filename.suffix == ".wav", "Only .wav files are supported"
         audio_tensor = filename.with_suffix(".safetensors")
