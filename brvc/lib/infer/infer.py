@@ -4,6 +4,7 @@ import librosa
 from numpy.typing import NDArray
 import resampy
 from lib.config.v2_config import default_config, ConfigV2
+from lib.features.emb.hubert import get_hf_hubert_model
 from lib.utils.audio import load_audio
 import numpy as np
 import logging
@@ -16,7 +17,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lib.modules.synthesizer_trn_ms import SynthesizerTrnMsNSFsid
     from accelerate import Accelerator
-    from fairseq.models.hubert.hubert import HubertModel
+    from fairseq.models.hubert.hubert import HubertModel as FairseqHubertModel
+    from transformers import HubertModel as HfHubertModel, Wav2Vec2FeatureExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +239,8 @@ from time import time
 
 
 def process_chunk(
-    hubert_model: "HubertModel",
+    hubert_model: "HfHubertModel",
+    feature_extractor: "Wav2Vec2FeatureExtractor",
     net_g: "SynthesizerTrnMsNSFsid",
     # sid: int,
     sid: torch.Tensor,
@@ -268,8 +271,11 @@ def process_chunk(
 
     t0 = time()
     with torch.no_grad():
-        logits = hubert_model.extract_features(**inputs)
-        feats: torch.Tensor = logits[0]
+        inputs = feature_extractor(audio, sampling_rate=16000, return_tensors="pt")
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        # Forward pass
+        outputs = hubert_model(**inputs)
+        feats = outputs.last_hidden_state  # shape: (1, T, 768)
 
     # Save feats as npy for debugging
     feats_np: NDArray[np.float32] = feats.squeeze(0).float().cpu().numpy()
@@ -412,7 +418,8 @@ def inference(
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import load_hubert_model
 
-    hubert_model, _ = load_hubert_model(accelerator=accelerator)
+    # hubert_model, _ = load_hubert_model(accelerator=accelerator)
+    hubert, feature_extractor = get_hf_hubert_model()
 
     logger.info("Starting inference pipeline...")
     device = accelerator.device
@@ -423,6 +430,11 @@ def inference(
     t_center = sr * x_center
     t_max = sr * x_max
     import json
+    
+    hubert.to(device)
+    hubert.eval()
+    # feature_extractor.to(device)
+    # feature_extractor.eval()
 
     debug_info = {
         "x_pad": x_pad,
@@ -492,7 +504,8 @@ def inference(
         t = t // window * window
         audio_opt.append(
             process_chunk(
-                hubert_model=hubert_model,
+                hubert_model=hubert,
+                feature_extractor=feature_extractor,
                 net_g=net_g,
                 sid=sid,
                 audio=audio_pad[s : t + t_pad2 + window],
@@ -509,7 +522,8 @@ def inference(
     logger.info(f"Processing final segment {total_segments}/{total_segments}...")
     audio_opt.append(
         process_chunk(
-            hubert_model=hubert_model,
+            hubert_model=hubert,
+            feature_extractor=feature_extractor,
             net_g=net_g,
             sid=sid,
             audio=audio_pad[t:],
