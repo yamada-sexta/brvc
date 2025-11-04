@@ -291,7 +291,7 @@ def train_model(
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")
     epoch_bar = tqdm(
-        range(1, epochs + 1), disable=not accelerator.is_main_process, desc=f"Epochs"
+        range(1, epochs + 1), disable=not accelerator.is_main_process, desc=f"Overall", dynamic_ncols=True
     )
     for epoch in epoch_bar:
         net_g.train()

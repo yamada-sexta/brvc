@@ -82,7 +82,7 @@ def extract_features(
         try:
             out_file = out_dir / file.with_suffix(".safetensors").name
             if out_file.exists():
-                logger.info(f"Skipping {file.name}, already processed.")
+                # logger.info(f"Skipping {file.name}, already processed.")
                 continue
             extract_feature(file, out_file, model, extractor, accelerator)
         except Exception:

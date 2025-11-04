@@ -117,7 +117,7 @@ def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: Hubert
         
         # Skip training-specific weights that don't exist in the base HuBERT model
         if name in ["label_embs_concat", "final_proj.weight", "final_proj.bias"]:
-            logger.info(f"Skipping training-specific weight: {name}")
+            # logger.info(f"Skipping training-specific weight: {name}")
             unused_weights.append(name)
             continue
         
