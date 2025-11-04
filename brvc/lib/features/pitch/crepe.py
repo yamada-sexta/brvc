@@ -7,24 +7,32 @@ import torchcrepe
 # from brvc.lib.features.pitch import pitch_predictor
 from lib.features.pitch.pitch_predictor import PitchExtractor
 
+
 class CRePE(PitchExtractor):
     def __init__(
-        self, sample_rate: int, window_size: int, f0_min: int, f0_max: int, device: str
+        self,
+        sample_rate: int,
+        device: str,
+        window_size: int = 160,
+        f0_min: int = 50,
+        f0_max: int = 1100,
     ):
         super().__init__(sample_rate, window_size, f0_min, f0_max)
         self.device = device
 
-    def extract_pitch(self, audio: NDArray[np.float32], p_len: int) -> NDArray[np.float32]:
+    def extract_pitch(
+        self, audio: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
         model = "full"
         batch_size = 512
         audio_tensor = torch.tensor(np.copy(audio))[None].float()
         f0, pd = torchcrepe.predict(
             audio_tensor,
-            self.sr,
-            self.window,
-            self.f0_min,
-            self.f0_max,
-            model,
+            sample_rate=self.sr,
+            hop_length=self.window,
+            fmin=self.f0_min,
+            fmax=self.f0_max,
+            model=model,
             batch_size=batch_size,
             device=self.device,
             return_periodicity=True,

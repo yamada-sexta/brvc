@@ -7,6 +7,7 @@ import os
 import numpy as np
 from torch import FloatTensor
 from torch import LongTensor
+from numpy.typing import NDArray
 
 from lib.train.utils.mel_processing import spectrogram_torch
 from lib.train.utils.path import load_filepaths_and_text, load_wav_to_torch
@@ -62,7 +63,7 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         lengths: list[int] = []
         for audiopath, text, pitch, pitchf, dv in self.audiopaths_and_text:
             if self.min_text_len <= len(text) and len(text) <= self.max_text_len:
-                audiopaths_and_text_new.append([audiopath, text, pitch, pitchf, dv])
+                audiopaths_and_text_new.append((audiopath, text, pitch, pitchf, dv))
                 lengths.append(os.path.getsize(audiopath) // (3 * self.hop_length))
         self.audiopaths_and_text = audiopaths_and_text_new
         self.lengths = lengths
@@ -75,12 +76,12 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         self,
         audiopath_and_text: tuple[str, str, str, str, str],
     ) -> tuple[
-        torch.FloatTensor,
-        torch.FloatTensor,
-        torch.FloatTensor,
-        torch.LongTensor,
-        torch.FloatTensor,
-        torch.LongTensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         # separate filename and text
         file = audiopath_and_text[0]
@@ -110,23 +111,26 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
 
         return (spec, wav, phone, pitch, pitchf, dv)
 
-    def get_labels(self, phone: str, pitch: str, pitchf: str) -> tuple[
-        torch.FloatTensor, torch.LongTensor, torch.FloatTensor
-    ]:
-        phone = np.load(phone)
+    def get_labels(
+        self, phone: Union[str, NDArray], pitch: Union[str, NDArray], pitchf: Union[str, NDArray]
+    ) -> tuple[torch.FloatTensor, torch.LongTensor, torch.FloatTensor]:
+        if isinstance(phone, str):
+            phone = np.load(phone)
         phone = np.repeat(phone, 2, axis=0)
-        pitch = np.load(pitch)
-        pitchf = np.load(pitchf)
+        if isinstance(pitch, str):
+            pitch = np.load(pitch)
+        if isinstance(pitchf, str):
+            pitchf = np.load(pitchf)
         n_num = min(phone.shape[0], 900)  # DistributedBucketSampler
         phone = phone[:n_num, :]
         pitch = pitch[:n_num]
         pitchf = pitchf[:n_num]
-        phone = torch.FloatTensor(phone)
-        pitch = torch.LongTensor(pitch)
-        pitchf = torch.FloatTensor(pitchf)
-        return phone, pitch, pitchf
+        phone_t = torch.FloatTensor(phone)
+        pitch_t = torch.LongTensor(pitch)
+        pitchf_t = torch.FloatTensor(pitchf)
+        return phone_t, pitch_t, pitchf_t
 
-    def get_audio(self, filename: str) -> tuple[torch.FloatTensor, torch.FloatTensor]:
+    def get_audio(self, filename: str) -> tuple[torch.Tensor, torch.Tensor]:
         audio, sampling_rate = load_wav_to_torch(filename)
         if sampling_rate != self.sampling_rate:
             raise ValueError(
@@ -136,9 +140,6 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
                 f"Sample rate mismatch: {sampling_rate}Hz doesn't match target {self.sampling_rate}Hz"
             )
         audio_norm = audio
-        #        audio_norm = audio / self.max_wav_value
-        #        audio_norm = audio / np.abs(audio).max()
-
         audio_norm = audio_norm.unsqueeze(0)
         spec_filename = filename.replace(".wav", ".spec.pt")
         if os.path.exists(spec_filename):
@@ -172,10 +173,14 @@ class TextAudioLoaderMultiNSFsid(torch.utils.data.Dataset):
         return spec, audio_norm
 
     def __getitem__(self, index: int) -> tuple[
-        torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.LongTensor, torch.FloatTensor, torch.LongTensor
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         return self.get_audio_text_pair(self.audiopaths_and_text[index])
 
     def __len__(self):
         return len(self.audiopaths_and_text)
-

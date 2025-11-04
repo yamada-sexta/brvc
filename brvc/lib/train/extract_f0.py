@@ -4,7 +4,7 @@ from typing import List, Tuple
 import numpy as np
 from tqdm import tqdm
 from lib.features.pitch.crepe import CRePE
-from lib.features.pitch.pitch_predictor import PitchPredictor
+from lib.features.pitch.pitch_predictor import PitchExtractor
 from lib.utils.audio import load_audio
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -41,14 +41,14 @@ def extract_f0_pair(
     inp_path: Path,
     opt_path1: Path,
     opt_path2: Path,
-    pitch_extractor: PitchPredictor,
+    pitch_extractor: PitchExtractor,
 ) -> None:
     """Extract F0 and coarse F0, and save them as .npy."""
     if opt_path1.exists() and opt_path2.exists():
         return
     try:
-        wav = load_audio(inp_path, resample_rate=pitch_extractor.sampling_rate)
-        f0 = pitch_extractor.compute_f0(wav)
+        wav = load_audio(inp_path, resample_rate=pitch_extractor.sr)
+        f0 = pitch_extractor.extract_pitch(wav)
         np.save(opt_path2, f0, allow_pickle=False)
         np.save(opt_path1, coarse_f0(f0), allow_pickle=False)
     except Exception as e:

@@ -210,7 +210,7 @@ def interface_cli(
 
     audio_out = inference(
         net_g=net_g,
-        audio=audio_data,
+        audio=audio_data.astype(np.float32),
         # sample_rate=sample_rate,
         accelerator=accelerator,
         f0_offset=f0_offset,
@@ -363,7 +363,7 @@ def get_f0(
         sample_rate=sr, window_size=window, f0_min=f0_min, f0_max=f0_max, device=device
     )
 
-    f0 = f0_extractor.extract_pitch(x, p_len=p_len)
+    f0 = f0_extractor.extract_pitch(x)
 
     f0 *= pow(2, f0_up_key / 12)
 

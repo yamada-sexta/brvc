@@ -5,13 +5,13 @@ hann_window = {}
 
 
 def spectrogram_torch(
-    y: torch.FloatTensor,
+    y: torch.Tensor,
     n_fft: int,
     sampling_rate: int,
     hop_size: int,
     win_size: int,
     center: bool = False,
-) -> torch.FloatTensor:
+) -> torch.Tensor:
     """Convert waveform into Linear-frequency Linear-amplitude spectrogram.
 
     Args:

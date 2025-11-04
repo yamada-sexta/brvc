@@ -149,6 +149,6 @@ class PitchExtractor(ABC):
         self.f0_max = f0_max
     
     @abstractmethod
-    def extract_pitch(self, audio: NDArray[np.float32], p_len: int) -> NDArray[np.float32]:
+    def extract_pitch(self, audio: NDArray[np.float32]) -> NDArray[np.float32]:
         """Extracts and returns the fundamental frequency (f0) from audio."""
         pass

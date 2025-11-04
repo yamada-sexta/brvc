@@ -1,11 +1,13 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Literal, Union, Optional
+
 
 def run_training(
     audio_dir: Path,
     exp_dir: Optional[Path] = None,
     save_every_epoch: Optional[int] = None,
     epochs: int = 200,
+    load_pretrain: Union[Literal["last", "base"], None] = None,
 ):
     if not audio_dir.exists():
         raise FileNotFoundError(f"Audio directory {audio_dir} does not exist.")
@@ -13,7 +15,6 @@ def run_training(
     from lib.train.extract_f0 import extract_f0
     from lib.train.extract_features import extract_features
     from lib.train.train_model import train_model
-
 
     if exp_dir is None:
         exp_dir = Path("experiments") / audio_dir.name
@@ -38,7 +39,7 @@ def run_training(
     extract_features(
         exp_dir=exp_dir,
     )
-    
+
     train_files = []
 
     # What we want to have is a list of tuples (audio_path, spec_path, f0_path)
@@ -53,13 +54,23 @@ def run_training(
         f0_path = f0_dir / wav_path.name.replace(".wav", ".npy")
         f0nsf_path = f0nsf_dir / wav_path.name.replace(".wav", ".npy")
         speaker_id = "0"
-        train_files.append((str(wav_path), str(feature_path), str(f0_path), str(f0nsf_path), speaker_id))
+        train_files.append(
+            (
+                str(wav_path),
+                str(feature_path),
+                str(f0_path),
+                str(f0nsf_path),
+                speaker_id,
+            )
+        )
 
     train_model(
         train_files=train_files,
         exp_dir=exp_dir,
         epochs=epochs,
         save_every_epoch=save_every_epoch,
+        pretrain_d=load_pretrain,
+        pretrain_g=load_pretrain,
     )
 
     pass
