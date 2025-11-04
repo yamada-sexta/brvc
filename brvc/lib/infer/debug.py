@@ -1,8 +1,12 @@
 import numpy as np
 import os
 from typing import Tuple, Optional
+counter = 0
 
 def compare_arrays(arr1: np.ndarray, arr2: np.ndarray) -> Tuple[str, Optional[float]]:
+    global counter
+    counter += 1
+    print(f"\nComparison #{counter}:")
     print(f"--- Comparing Array 1 (Length: {len(arr1)}) and Array 2 (Length: {len(arr2)}) ---")
 
     # 1. Compare Lengths
@@ -42,6 +46,8 @@ def load_and_compare(filepath1: str, filepath2: str):
         # Load the arrays from the .npy files
         actual_arr1 = np.load(filepath1)
         actual_arr2 = np.load(filepath2)
+        
+        print(f"Loaded arrays from:\n  {filepath1}\n  {filepath2}")
 
         # Perform comparison
         message, difference_sum = compare_arrays(actual_arr1, actual_arr2)
@@ -54,12 +60,15 @@ def load_and_compare(filepath1: str, filepath2: str):
 
 # Example of how you would call it with your original paths:
 # Note: Uncomment the line below and ensure the files exist if running locally.
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_f0bak.npy', '/mnt/d/repos/rvc-webgui-fork/debug_f0bak.npy')
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_f0_coarse.npy', '/mnt/d/repos/rvc-webgui-fork/debug_f0_coarse.npy')
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_feats.npy', '/mnt/d/repos/rvc-webgui-fork/debug_feats.npy')
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_feats_interp.npy', '/mnt/d/repos/rvc-webgui-fork/debug_feats_interp.npy')
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_audio_opt_array.npy', '/mnt/d/repos/rvc-webgui-fork/debug_audio_opt_array.npy')
-load_and_compare('/mnt/d/repos/rvc-webgui-fork/debug_final_output_audio.npy', '/mnt/d/repos/rvc-webgui-fork/debug_final_output_audio.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_loaded_audio.npy', '/mnt/d/repos/rvc-webgui-fork/debug_loaded_audio.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_filtered_audio.npy', '/mnt/d/repos/rvc-webgui-fork/debug_filtered_audio.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_f0bak.npy', '/mnt/d/repos/rvc-webgui-fork/debug_f0bak.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_f0_coarse.npy', '/mnt/d/repos/rvc-webgui-fork/debug_f0_coarse.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_feats.npy', '/mnt/d/repos/rvc-webgui-fork/debug_feats.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_feats_interp.npy', '/mnt/d/repos/rvc-webgui-fork/debug_feats_interp.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_audio_opt_array.npy', '/mnt/d/repos/rvc-webgui-fork/debug_audio_opt_array.npy')
+load_and_compare('/mnt/d/repos/brvc/debug_final_output_audio.npy', '/mnt/d/repos/rvc-webgui-fork/debug_final_output_audio.npy')
+
 
 # Load wavs for audio comparison
 import soundfile as sf
@@ -91,4 +100,4 @@ def load_wav_and_compare(filepath1: str, filepath2: str):
     except Exception as e:
         print(f"An error occurred during file loading or comparison: {e}")
 
-load_wav_and_compare('/mnt/d/repos/rvc-webgui-fork/ttt_out.wav', '/mnt/d/repos/rvc-webgui-fork/ttt_out.wav')
+load_wav_and_compare('/mnt/d/repos/brvc/ttt_out.wav', '/mnt/d/repos/rvc-webgui-fork/ttt_out.wav')

@@ -36,68 +36,31 @@ def change_rms(
     sr2: int,
     rate: float,
 ) -> NDArray[np.float32]:
-    """
-    Mix RMS levels from input audio (data1) with output audio (data2).
-
-    Parameters
-    ----------
-    data1 : NDArray[np.float32]
-        Input audio data
-    sr1 : int
-        Sample rate of input audio
-    data2 : NDArray[np.float32]
-        Output audio data
-    sr2 : int
-        Sample rate of output audio
-    rate : float
-        Mix rate (0.0 = use data1 RMS, 1.0 = use data2 RMS)
-
-    Returns
-    -------
-    NDArray[np.float32]
-        Audio with mixed RMS levels
-    """
-    # Calculate frame size (half second)
-    frame_size1 = sr1 // 2
-    frame_size2 = sr2 // 2
-
-    # Pad data to make it divisible by frame size
-    pad1 = (frame_size1 - (len(data1) % frame_size1)) % frame_size1
-    pad2 = (frame_size2 - (len(data2) % frame_size2)) % frame_size2
-
-    data1_padded = np.pad(data1, (0, pad1), mode="constant") if pad1 > 0 else data1
-    data2_padded = np.pad(data2, (0, pad2), mode="constant") if pad2 > 0 else data2
-
-    # Reshape and calculate RMS
-    rms1 = np.sqrt(np.mean(np.square(data1_padded.reshape(-1, frame_size1)), axis=1))
-    rms2 = np.sqrt(np.mean(np.square(data2_padded.reshape(-1, frame_size2)), axis=1))
-
-    # Convert to tensors and interpolate to match output length
-    rms1_tensor = torch.from_numpy(rms1).unsqueeze(0).unsqueeze(0)
-    rms2_tensor = torch.from_numpy(rms2).unsqueeze(0).unsqueeze(0)
-
-    rms1_interp = F.interpolate(
-        rms1_tensor, size=len(data2), mode="linear", align_corners=False
+    rms1 = librosa.feature.rms(
+        y=data1, frame_length=sr1 // 2 * 2, hop_length=sr1 // 2
+    )  # 每半秒一个点
+    rms2 = librosa.feature.rms(y=data2, frame_length=sr2 // 2 * 2, hop_length=sr2 // 2)
+    rms1 = torch.from_numpy(rms1)
+    rms1 = F.interpolate(
+        rms1.unsqueeze(0), size=data2.shape[0], mode="linear"
     ).squeeze()
-    rms2_interp = F.interpolate(
-        rms2_tensor, size=len(data2), mode="linear", align_corners=False
+    rms2 = torch.from_numpy(rms2)
+    rms2 = F.interpolate(
+        rms2.unsqueeze(0), size=data2.shape[0], mode="linear"
     ).squeeze()
-
-    # Avoid division by zero
-    rms2_interp = torch.max(rms2_interp, torch.ones_like(rms2_interp) * 1e-6)
-
-    # Apply RMS mixing
-    data2_tensor = torch.from_numpy(data2)
-    data2_tensor *= torch.pow(rms1_interp, 1 - rate) * torch.pow(rms2_interp, rate - 1)
-
-    return data2_tensor.numpy().astype(np.float32)
+    rms2 = torch.max(rms2, torch.zeros_like(rms2) + 1e-6)
+    data2 *= (
+        torch.pow(rms1, torch.tensor(1 - rate))
+        * torch.pow(rms2, torch.tensor(rate - 1))
+    ).numpy()
+    return data2
 
 
 def resample_audio(
-    audio: NDArray[np.float32],
+    audio: NDArray[np.int16],
     orig_sr: int,
     target_sr: int,
-) -> NDArray[np.float32]:
+) -> NDArray[np.int16]:
     # Check if the audio is stereo and downmix to mono
     if audio.ndim > 1 and audio.shape[1] > 1:
         # print("Detected stereo audio, downmixing to mono.")
@@ -142,7 +105,27 @@ def interface_cli(
 
     logger.info(f"Loading audio from {audio}...")
     # Load at 16kHz for processing, will be upsampled to target SR later
-    audio_data = load_audio(audio, resample_rate=16000)
+    # audio_data = load_audio(audio, resample_rate=16000)
+    # Read audio directly as numpy array
+    audio_data, original_sr = sf.read(audio)
+    # Print out what data was loaded
+    print(f"Loaded audio dtype: {audio_data.dtype}, shape: {audio_data.shape}, original_sr: {original_sr}")
+    # Convert it to int16
+    audio_data = audio_data.astype(np.int16)
+    # Save the audio data to check if loading is correct
+    np.save("debug_loaded_audio.npy", audio_data, allow_pickle=False)
+    if original_sr != 16000:
+        logger.info(
+            f"Resampling audio from original SR {original_sr}Hz to 16kHz for processing..."
+        )
+        audio_data = resample_audio(audio_data, orig_sr=original_sr, target_sr=16000)
+    
+    audio_max = np.abs(audio_data).max() / 0.95
+    if audio_max > 1.0:
+        print(f"Normalizing audio by factor {audio_max} to prevent clipping.")
+        audio_data /= audio_max
+    times = [0.0, 0.0, 0.0]
+    
 
     logger.info("Loading synthesis model...")
 
@@ -348,8 +331,8 @@ def get_f0(
     f0 = f0_extractor.extract_pitch(x, p_len=p_len)
 
     f0 *= pow(2, f0_up_key / 12)
-    f0bak = f0.copy()
-
+    
+    tf0 = sr // window
     f0bak = f0.copy()
     f0_mel_min = 1127 * np.log(1 + f0_min / 700)
     f0_mel_max = 1127 * np.log(1 + f0_max / 700)
@@ -362,8 +345,8 @@ def get_f0(
     f0_coarse = np.rint(f0_mel).astype(np.int32)
     
     # Save for debugging
-    # np.save("debug_f0bak.npy", f0bak)
-    # np.save("debug_f0_coarse.npy", f0_coarse)
+    np.save("debug_f0bak.npy", f0bak)
+    np.save("debug_f0_coarse.npy", f0_coarse)
     # Should be the same as the RVC implementation
     return f0_coarse, f0bak
 
@@ -373,7 +356,7 @@ def get_f0(
 # Pipeline initialized with {"x_pad": 3, "x_query": 10, "x_center": 60, "x_max": 65, "is_half": true, "t_pad": 48000, "t_pad_tgt": 144000, "t_pad2": 96000, "t_query": 160000, "t_center": 960000, "t_max": 1040000}
 def inference(
     net_g: "SynthesizerTrnMsNSFsid",
-    audio: NDArray[np.float32],
+    audio: NDArray[np.int16],
     accelerator: "Accelerator",
     f0_offset: int = 0,
     protect: float = 0.33,
@@ -420,6 +403,9 @@ def inference(
     }
     logger.info(f"Debug Info: {json.dumps(debug_info, indent=2)}")
     audio = signal.filtfilt(bh, ah, audio)
+    
+    # Save audio after filtering for debugging
+    np.save("debug_filtered_audio.npy", audio, allow_pickle=False)
     audio_pad = np.pad(audio, (window // 2, window // 2), mode="reflect")
     opt_ts: list[int] = []
     if audio_pad.shape[0] < t_max:
