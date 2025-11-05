@@ -50,17 +50,22 @@ def save_checkpoint(
 
         # Save model weights as safetensors (only tensors allowed).
         g_safetensors_path = save_dir / f"G_{epoch}.safetensors"
+        g_safetensors_latest = save_dir / f"G_latest.safetensors"
         d_safetensors_path = save_dir / f"D_{epoch}.safetensors"
+        d_safetensors_latest = save_dir / f"D_latest.safetensors"
         optimizers_path = save_dir / f"O_{epoch}.pth"
+        optim_latest_path = save_dir / f"O_latest.pth"
 
         save_model(
             unwrapped_g,
             str(g_safetensors_path),
         )
+        
         save_model(
             unwrapped_d,
             str(d_safetensors_path),
         )
+
         torch.save(
             {
                 "optimizer_g": optim_g.state_dict(),
@@ -70,7 +75,10 @@ def save_checkpoint(
             },
             optimizers_path,
         )
-
+        # Also save latest COPY
+        shutil.copy(g_safetensors_path, g_safetensors_latest, follow_symlinks=False)
+        shutil.copy(d_safetensors_path, d_safetensors_latest, follow_symlinks=False)
+        shutil.copy(optimizers_path, optim_latest_path, follow_symlinks=False)
         logger.info(f"[success] Saved checkpoint at step {global_step}")
 
 
