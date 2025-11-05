@@ -288,9 +288,7 @@ def train_model(
             main_process_only=True,
         )
     if opt_state is not None:
-        logger.info(
-            f"Loading optimizer state from {opt_state}", main_process_only=True
-        )
+        logger.info(f"Loading optimizer state from {opt_state}", main_process_only=True)
         # Load optimizer states
         ckpt = torch.load(opt_state, map_location="cpu")
         optim_g.load_state_dict(ckpt["optimizer_g"])
@@ -299,7 +297,7 @@ def train_model(
             f"Loaded optimizer states from epoch {ckpt.get('epoch', 'N/A')}, step {ckpt.get('global_step', 'N/A')}",
             main_process_only=True,
         )
-    
+
     # Schedulers
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=lr_decay)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=lr_decay)

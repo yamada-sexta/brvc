@@ -148,8 +148,7 @@ def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: Hubert
                 # )
 
                 if key in name or (
-                    key.split("w2v_model.")[-1]
-                    == name.split(".")[0]
+                    key.split("w2v_model.")[-1] == name.split(".")[0]
                     # and not is_finetuned
                 ):
                     is_used = True

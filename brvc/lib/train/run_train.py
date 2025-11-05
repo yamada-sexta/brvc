@@ -8,12 +8,13 @@ from lib.train.config import F0_DIR, GT_DIR, HUBERT_DIR, ONLINE_DATASETS
 
 logger = logging.getLogger(__name__)
 
+
 def run_training_cli(
     dataset: str,
     exp_dir: Optional[Path] = None,
     save_every: Optional[int] = None,
     epochs: int = 200,
-    load_pretrain: Union[Literal["last", "base"], None] = "base",
+    pretrain: Literal["last", "base", "none"] = "base",
 ):
     """
     Run the training process with command-line arguments.
@@ -24,14 +25,21 @@ def run_training_cli(
         epochs (int): Number of training epochs.
         load_pretrain (Union[Literal["last", "base"], None]): Pretrained model to load.
     """
+    ds: Union[str, Path] = dataset
     if dataset not in ONLINE_DATASETS:
-        dataset = Path(dataset)
+        ds = Path(dataset)
+    # pt = pretrain
+    if pretrain == "none":
+        pt = None
+    else:
+        pt = pretrain
+
     run_training(
-        dataset=dataset,
+        dataset=ds,
         exp_dir=exp_dir,
         save_every_epoch=save_every,
         epochs=epochs,
-        load_pretrain=load_pretrain,
+        load_pretrain=pt,
     )
 
 
@@ -47,7 +55,9 @@ def run_training(
     if isinstance(dataset, Path) and not dataset.exists():
         raise FileNotFoundError(f"Audio directory {dataset} does not exist.")
     if isinstance(dataset, str) and dataset not in ONLINE_DATASETS:
-        raise ValueError(f"Unknown online dataset: {dataset}. Supported: {ONLINE_DATASETS}")
+        raise ValueError(
+            f"Unknown online dataset: {dataset}. Supported: {ONLINE_DATASETS}"
+        )
     from lib.train.preprocess import preprocess_dataset
     from lib.train.extract_f0 import extract_f0
     from lib.train.extract_features import extract_features

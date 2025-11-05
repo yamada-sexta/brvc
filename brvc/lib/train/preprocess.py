@@ -147,7 +147,7 @@ def process_audio_array(
 
                 if gt_file.exists() and wav16_file.exists():
                     idx1 += 1
-                    # continue
+                    # file already exists, move on
                     pass
                 elif len(sliced_audio[start:]) > (per + overlap) * sr:
                     tmp_audio = sliced_audio[start : start + int(per * sr)]
@@ -161,6 +161,26 @@ def process_audio_array(
                         )
                     idx1 += 1
                 else:
+                    # # Tail segment: decide whether to keep or drop it. Tiny
+                    # # tail segments create very short spectrograms which can
+                    # # break downstream training (shorter than segment_size).
+                    # tail = sliced_audio[start:]
+                    # tail_len = tail.shape[0]
+                    # min_tail_fraction = 0.5  # keep tail only if >= 50% of per
+                    # if tail_len >= int(min_tail_fraction * per * sr):
+                    #     norm_audio = normalize_audio(tail, max_amp, alpha)
+                    #     if norm_audio is not None:
+                    #         save_audio(norm_audio, sr, gt_file)
+                    #         save_audio(norm_audio, sr, wav16_file, 16000)
+                    #     else:
+                    #         logger.warning(
+                    #             f"Skipping tail segment {idx}_{idx1} from {identifier} due to amplitude issues."
+                    #         )
+                    # else:
+                    #     logger.debug(
+                    #         f"Dropping tiny tail segment {idx}_{idx1} (len={tail_len} samples) from {identifier}."
+                    #     )
+                    # break
                     tmp_audio = sliced_audio[start:]
                     norm_audio = normalize_audio(tmp_audio, max_amp, alpha)
                     if norm_audio is not None:
@@ -333,6 +353,9 @@ def preprocess_dataset(
             if max_sample_size and counter >= max_sample_size:
                 break
 
+        logger.info("Finished processing LJSpeech dataset.")
+        return
+
     audio_exts = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
     if recursive:
         files = [p for p in dataset.rglob("*") if p.suffix.lower() in audio_exts]
@@ -347,7 +370,6 @@ def preprocess_dataset(
     for idx, file in enumerate(
         tqdm(files, dynamic_ncols=True, desc="Processing audio files")
     ):
-
         process_file(
             path=file,
             idx=idx,
@@ -383,12 +405,12 @@ def preprocess_cli(
 ) -> None:
     """CLI entry point for preprocessing."""
     if dataset in ONLINE_DATASETS:
-        audio_collection_arg: ONLINE_DATASET_TYPE = dataset
+        audio_collection_arg: ONLINE_DATASET_TYPE | Path = dataset
     else:
-        audio_collection_arg = Path(dataset)
+        audio_collection_arg: ONLINE_DATASET_TYPE | Path = Path(dataset)
 
     preprocess_dataset(
-        audio_collection=audio_collection_arg,
+        dataset=audio_collection_arg,
         exp_dir=exp_dir,
         sample_rate=sample_rate,
         per=per,
