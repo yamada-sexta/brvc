@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 import logging
 import os
 import shutil
-from transformers import Wav2Vec2FeatureExtractor, HubertModel
+from transformers import AutoProcessor, Wav2Vec2FeatureExtractor, HubertModel
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +65,11 @@ from transformers import HubertModel, Wav2Vec2FeatureExtractor
 def get_hf_hubert_model(
     accelerator: Accelerator,
 ) -> tuple[HubertModel, Wav2Vec2FeatureExtractor]:
-    # Check if model exists, if not download and convert
-    if not (
-        hf_model_path.exists()
-        and (hf_model_path / "config.json").exists()
-        and (hf_model_path / "model.safetensors").exists()
-        and (hf_model_path / "preprocessor_config.json").exists()
-    ):
-        download_rvc_hubert()
-        convert_fairseq_to_hf_hubert()
-
-    model = HubertModel.from_pretrained("assets/hf/hubert_base")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-        "assets/hf/hubert_base"
-    )
-    model.to(accelerator.device)
+    model_name = "facebook/hubert-base-ls960"
+    processor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
+    model = HubertModel.from_pretrained(model_name)
     # feature_extractor.to(accelerator.device)
     model.eval()
+    model.to(accelerator.device)
 
-    return model, feature_extractor
+    return model, processor
