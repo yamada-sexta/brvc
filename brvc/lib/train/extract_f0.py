@@ -66,10 +66,10 @@ def extract_f0_pair(
         logger.debug(traceback.format_exc())
 
 
-def collect_audio_paths(exp_dir: Path) -> List[Tuple[Path, Path]]:
+def collect_audio_paths(cache_dir: Path) -> List[Tuple[Path, Path]]:
     """Collect all (input, coarse_output, fine_output) triplets."""
-    in_dir = exp_dir / RESAMPLED_16K_DIR
-    out_dir = exp_dir / F0_DIR
+    in_dir = cache_dir / RESAMPLED_16K_DIR
+    out_dir = cache_dir / F0_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     res: List[Tuple[Path, Path]] = []
 
@@ -94,9 +94,9 @@ class AudioDataset(Dataset):
 
 
 @torch.no_grad()
-def extract_f0(exp_dir: Path, accelerator: Accelerator = Accelerator()) -> None:
+def extract_f0(cache_dir: Path, accelerator: Accelerator = Accelerator()) -> None:
     device = accelerator.device
-    paths = collect_audio_paths(exp_dir)
+    paths = collect_audio_paths(cache_dir)
     dataset = AudioDataset(paths)
     dataloader = DataLoader(dataset, batch_size=None)
     dataloader = accelerator.prepare(dataloader)

@@ -99,7 +99,8 @@ def load_pretrained(
 
 def train_model(
     train_files: List[Tuple[Path, Path, Path]],
-    exp_dir: Path,
+    cache_dir: Path,
+    save_dir: Path,
     epochs: int = 200,
     # batch_size: int = 4,
     learning_rate: float = 1e-4,
@@ -127,7 +128,7 @@ def train_model(
 
     # Create model directory
     if accelerator.is_main_process:
-        os.makedirs(exp_dir, exist_ok=True)
+        os.makedirs(save_dir, exist_ok=True)
 
     # Dataset
     train_dataset = TextAudioLoaderMultiNSFsid(
@@ -195,19 +196,19 @@ def train_model(
 
     # Load pretrained if specified
     if pretrain_g == "last":
-        ckpt_g = sorted(exp_dir.glob("G_*.pth"))
+        ckpt_g = sorted(save_dir.glob("G_*.pth"))
         if len(ckpt_g) > 0:
             pretrain_g = ckpt_g[-1]
         else:
             pretrain_g = None
     if pretrain_d == "last":
-        ckpt_d = sorted(exp_dir.glob("D_*.pth"))
+        ckpt_d = sorted(save_dir.glob("D_*.pth"))
         if len(ckpt_d) > 0:
             pretrain_d = ckpt_d[-1]
         else:
             pretrain_d = None
     if opt_state == "last":
-        ckpt_o = sorted(exp_dir.glob("O_*.pth"))
+        ckpt_o = sorted(save_dir.glob("O_*.pth"))
         if len(ckpt_o) > 0:
             opt_state = ckpt_o[-1]
         else:
@@ -437,7 +438,7 @@ def train_model(
                 optim_d,
                 epoch,
                 global_step,
-                exp_dir,
+                save_dir,
             )
 
         accelerator.wait_for_everyone()
@@ -453,7 +454,7 @@ def train_model(
             optim_d,
             epochs,
             global_step,
-            exp_dir,
+            save_dir,
         )
 
 

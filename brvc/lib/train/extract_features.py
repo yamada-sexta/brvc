@@ -53,7 +53,7 @@ def extract_feature(
 
 @torch.no_grad()
 def extract_features(
-    exp_dir: Path,
+    cache_dir: Path,
     accelerator: Accelerator = Accelerator(),
 ):
     """Extract HuBERT features for all files in the dataset."""
@@ -62,8 +62,8 @@ def extract_features(
     model.eval()
     model.to(accelerator.device)
 
-    wav_dir = exp_dir / RESAMPLED_16K_DIR
-    out_dir = exp_dir / HUBERT_DIR
+    wav_dir = cache_dir / RESAMPLED_16K_DIR
+    out_dir = cache_dir / HUBERT_DIR
 
     out_dir.mkdir(parents=True, exist_ok=True)
     wav_files = sorted(wav_dir.glob("*.wav"))

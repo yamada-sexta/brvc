@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 def run_training_cli(
     dataset: str,
-    exp_dir: Optional[Path] = None,
+    save_dir: Optional[Path] = None,
+    cache_dir: Optional[Path] = None,
     save_every: Optional[int] = None,
     epochs: int = 200,
     pretrain: Literal["last", "base", "none"] = "base",
@@ -36,7 +37,9 @@ def run_training_cli(
 
     run_training(
         dataset=ds,
-        exp_dir=exp_dir,
+        # exp_dir=exp_dir,
+        save_dir=save_dir,
+        cache_dir=cache_dir,
         save_every_epoch=save_every,
         epochs=epochs,
         load_pretrain=pt,
@@ -45,7 +48,9 @@ def run_training_cli(
 
 def run_training(
     dataset: Union[str, Path],
-    exp_dir: Optional[Path] = None,
+    # exp_dir: Optional[Path] = None,
+    save_dir: Optional[Path] = None,
+    cache_dir: Optional[Path] = None,
     save_every_epoch: Optional[int] = None,
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
@@ -63,15 +68,19 @@ def run_training(
     from lib.train.extract_features import extract_features
     from lib.train.train_model import train_model
 
-    if exp_dir is None:
-        exp_dir = Path("experiments") / dataset_name
-        logger.info(f"No exp_dir provided. Using default: {exp_dir}")
+    if cache_dir is None:
+        cache_dir = Path("cache") / dataset_name
+        logger.info(f"No cache_dir provided. Using default: {cache_dir}")
+    if save_dir is None:
+        save_dir = Path("models") / dataset_name
+        logger.info(f"No save_dir provided. Using default: {save_dir}")
 
-    exp_dir.mkdir(parents=True, exist_ok=True)
-
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    
     preprocess_dataset(
         dataset=dataset,
-        exp_dir=exp_dir,
+        cache_dir=cache_dir,
         sample_rate=48000,
         per=10.0,
         overlap=1.0,
@@ -80,22 +89,22 @@ def run_training(
     )
 
     extract_f0(
-        exp_dir=exp_dir,
+        cache_dir=cache_dir,
         # sample_rate=48000,
         accelerator=accelerator,
     )
 
     extract_features(
-        exp_dir=exp_dir,
+        cache_dir=cache_dir,
         accelerator=accelerator,
     )
 
     train_files: list[tuple[Path, Path, Path]] = []
 
     # What we want to have is a list of tuples (audio_path, spec_path, f0_path)
-    wav_dir = exp_dir / GT_DIR
-    feature_dir = exp_dir / HUBERT_DIR
-    f0_dir = exp_dir / F0_DIR
+    wav_dir = cache_dir / GT_DIR
+    feature_dir = cache_dir / HUBERT_DIR
+    f0_dir = cache_dir / F0_DIR
     # f0nsf_dir = exp_dir / "2b-f0nsf"
     # Generate the list of files
     # Each row should be (audio_path, feature_path, f0_path, f0nsf_path, speaker_id)
@@ -114,7 +123,8 @@ def run_training(
 
     train_model(
         train_files=train_files,
-        exp_dir=exp_dir,
+        cache_dir=cache_dir,
+        save_dir=save_dir,
         epochs=epochs,
         save_every_epoch=save_every_epoch,
         pretrain_d=load_pretrain,

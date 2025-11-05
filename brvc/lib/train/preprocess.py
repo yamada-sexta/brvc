@@ -196,7 +196,7 @@ def process_audio_array(
 
 def preprocess_dataset(
     dataset: Union[Path, ONLINE_DATASET_TYPE],
-    exp_dir: Optional[Path] = None,
+    cache_dir: Optional[Path] = None,
     sample_rate: int = 48000,
     per: float = 3.7,
     overlap: float = 0.3,
@@ -235,11 +235,11 @@ def preprocess_dataset(
             f"Unknown online dataset: {dataset}. Supported: {ONLINE_DATASETS}"
         )
 
-    if exp_dir is None:
-        exp_dir = Path("experiments") / (
+    if cache_dir is None:
+        cache_dir = Path("experiments") / (
             dataset if isinstance(dataset, str) else dataset.name
         )
-        logger.info(f"No exp_dir provided. Using default: {exp_dir}")
+        logger.info(f"No exp_dir provided. Using default: {cache_dir}")
 
     slicer = Slicer(
         sr=sample_rate,
@@ -257,8 +257,8 @@ def preprocess_dataset(
     else:
         raise ValueError("Unexpected result from signal.butter")
 
-    gt_wavs_dir = exp_dir / GT_DIR
-    wavs16k_dir = exp_dir / RESAMPLED_16K_DIR
+    gt_wavs_dir = cache_dir / GT_DIR
+    wavs16k_dir = cache_dir / RESAMPLED_16K_DIR
     gt_wavs_dir.mkdir(parents=True, exist_ok=True)
     wavs16k_dir.mkdir(parents=True, exist_ok=True)
     if dataset == "phoneme_asr":
@@ -411,7 +411,7 @@ def preprocess_cli(
 
     preprocess_dataset(
         dataset=audio_collection_arg,
-        exp_dir=exp_dir,
+        cache_dir=exp_dir,
         sample_rate=sample_rate,
         per=per,
         overlap=overlap,
