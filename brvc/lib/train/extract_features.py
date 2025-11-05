@@ -58,7 +58,7 @@ def extract_features(
 ):
     """Extract HuBERT features for all files in the dataset."""
 
-    model, extractor = get_hf_hubert_model()
+    model, extractor = get_hf_hubert_model(accelerator=accelerator)
     model.eval()
     model.to(accelerator.device)
 

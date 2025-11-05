@@ -148,7 +148,8 @@ def recursively_load_weights(fairseq_model: FairseqHubertModel, hf_model: Hubert
                 # )
 
                 if key in name or (
-                    key.split("w2v_model.")[-1] == name.split(".")[0]
+                    key.split("w2v_model.")[-1]
+                    == name.split(".")[0]
                     # and not is_finetuned
                 ):
                     is_used = True
@@ -256,9 +257,10 @@ def convert_hubert_checkpoint(
     """
     from fairseq import checkpoint_utils
 
-    model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
-        [checkpoint_path]
-    )
+    with torch.serialization.safe_globals([fairseq.data.dictionary.Dictionary]):
+        model, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
+            [checkpoint_path]
+        )
     if saved_cfg is None:
         raise ValueError("Could not find model configuration.")
     if config_path is not None:

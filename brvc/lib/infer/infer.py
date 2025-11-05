@@ -361,7 +361,7 @@ def inference(
     logger.info("Loading HuBERT model...")
     from lib.train.extract_features import get_hf_hubert_model
 
-    hubert, feature_extractor = get_hf_hubert_model()
+    hubert, feature_extractor = get_hf_hubert_model(accelerator)
 
     logger.info("Starting inference pipeline...")
     device = accelerator.device

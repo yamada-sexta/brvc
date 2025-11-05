@@ -4,20 +4,22 @@ from accelerate import Accelerator
 
 import logging
 
-from lib.train.config import F0_DIR, GT_DIR, HUBERT_DIR
+from lib.train.config import F0_DIR, GT_DIR, HUBERT_DIR, ONLINE_DATASETS
 
 logger = logging.getLogger(__name__)
 
 
 def run_training_cli(
-    audio_dir: Path,
+    dataset: str,
     exp_dir: Optional[Path] = None,
     save_every_epoch: Optional[int] = None,
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
 ):
+    if dataset not in ONLINE_DATASETS:
+        dataset = Path(dataset)
     run_training(
-        audio_dir=audio_dir,
+        dataset=dataset,
         exp_dir=exp_dir,
         save_every_epoch=save_every_epoch,
         epochs=epochs,
@@ -26,27 +28,31 @@ def run_training_cli(
 
 
 def run_training(
-    audio_dir: Path,
+    dataset: Union[str, Path],
     exp_dir: Optional[Path] = None,
     save_every_epoch: Optional[int] = None,
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
     accelerator: Accelerator = Accelerator(),
 ):
-    if not audio_dir.exists():
-        raise FileNotFoundError(f"Audio directory {audio_dir} does not exist.")
+    dataset_name = dataset if isinstance(dataset, str) else dataset.name
+    if isinstance(dataset, Path) and not dataset.exists():
+        raise FileNotFoundError(f"Audio directory {dataset} does not exist.")
+    if isinstance(dataset, str) and dataset not in ONLINE_DATASETS:
+        raise ValueError(f"Unknown online dataset: {dataset}. Supported: {ONLINE_DATASETS}")
     from lib.train.preprocess import preprocess_dataset
     from lib.train.extract_f0 import extract_f0
     from lib.train.extract_features import extract_features
     from lib.train.train_model import train_model
 
     if exp_dir is None:
-        exp_dir = Path("experiments") / audio_dir.name
+        exp_dir = Path("experiments") / dataset_name
+        logger.info(f"No exp_dir provided. Using default: {exp_dir}")
 
     exp_dir.mkdir(parents=True, exist_ok=True)
 
     preprocess_dataset(
-        audio_collection=audio_dir,
+        dataset=dataset,
         exp_dir=exp_dir,
         sample_rate=48000,
         per=10.0,

@@ -63,7 +63,7 @@ from transformers import HubertModel, Wav2Vec2FeatureExtractor
 
 
 def get_hf_hubert_model(
-    # accelerator: Accelerator,
+    accelerator: Accelerator,
 ) -> tuple[HubertModel, Wav2Vec2FeatureExtractor]:
     # Check if model exists, if not download and convert
     if not (
@@ -79,5 +79,8 @@ def get_hf_hubert_model(
     feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
         "assets/hf/hubert_base"
     )
+    model.to(accelerator.device)
+    # feature_extractor.to(accelerator.device)
+    model.eval()
 
     return model, feature_extractor
