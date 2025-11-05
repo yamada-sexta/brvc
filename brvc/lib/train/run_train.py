@@ -15,6 +15,7 @@ def run_training_cli(
     cache_dir: Optional[Path] = None,
     save_every: Optional[int] = None,
     epochs: int = 200,
+    batch_size: int = 1,
     pretrain: Literal["last", "base", "none"] = "base",
 ):
     """
@@ -43,6 +44,7 @@ def run_training_cli(
         save_every_epoch=save_every,
         epochs=epochs,
         load_pretrain=pt,
+        batch_size=batch_size,
     )
 
 
@@ -55,6 +57,7 @@ def run_training(
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
     accelerator: Accelerator = Accelerator(),
+    batch_size: int = 1,
 ):
     dataset_name = dataset if isinstance(dataset, str) else dataset.name
     if isinstance(dataset, Path) and not dataset.exists():
@@ -131,6 +134,7 @@ def run_training(
         pretrain_g=load_pretrain,
         opt_state=None if load_pretrain != "last" else "last",
         accelerator=accelerator,
+        batch_size=batch_size,
     )
 
     pass

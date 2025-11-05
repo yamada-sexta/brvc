@@ -102,7 +102,7 @@ def train_model(
     cache_dir: Path,
     save_dir: Path,
     epochs: int = 200,
-    # batch_size: int = 4,
+    batch_size: int = 1,
     learning_rate: float = 1e-4,
     lr_decay: float = 0.999875,
     seed: int = 1234,
@@ -150,6 +150,7 @@ def train_model(
         train_dataset,
         shuffle=False,
         collate_fn=collate_fn,
+        batch_size=batch_size,
     )
 
     # Models
