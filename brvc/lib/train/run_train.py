@@ -8,20 +8,28 @@ from lib.train.config import F0_DIR, GT_DIR, HUBERT_DIR, ONLINE_DATASETS
 
 logger = logging.getLogger(__name__)
 
-
 def run_training_cli(
     dataset: str,
     exp_dir: Optional[Path] = None,
-    save_every_epoch: Optional[int] = None,
+    save_every: Optional[int] = None,
     epochs: int = 200,
     load_pretrain: Union[Literal["last", "base"], None] = "base",
 ):
+    """
+    Run the training process with command-line arguments.
+    Args:
+        dataset (str | Path): Path to the dataset or name of the online dataset.
+        exp_dir (Optional[Path]): Directory to save experiment outputs.
+        save_every (Optional[int]): Save model every N epochs. If None, only save at the end.
+        epochs (int): Number of training epochs.
+        load_pretrain (Union[Literal["last", "base"], None]): Pretrained model to load.
+    """
     if dataset not in ONLINE_DATASETS:
         dataset = Path(dataset)
     run_training(
         dataset=dataset,
         exp_dir=exp_dir,
-        save_every_epoch=save_every_epoch,
+        save_every_epoch=save_every,
         epochs=epochs,
         load_pretrain=load_pretrain,
     )
