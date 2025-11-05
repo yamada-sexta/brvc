@@ -23,8 +23,8 @@ dependencies = [
     "safetensors>=0.6.2",
     "numba>=0.62.1",
 ]
-[project.scripts]
-hello = "jurigged"
+# [project.scripts]
+# hello = "jurigged"
 
 # [tool.uv]
 # package = true
