@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import TYPE_CHECKING
 from accelerate import Accelerator
-from omegaconf import DictConfig
+# from omegaconf import DictConfig
 
-if TYPE_CHECKING:
-    from fairseq.models.hubert.hubert import HubertModel
+# if TYPE_CHECKING:
+    # from fairseq.models.hubert.hubert import HubertModel
 import logging
 import os
 import shutil
