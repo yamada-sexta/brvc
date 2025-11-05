@@ -288,6 +288,50 @@ def preprocess_dataset(
                 break
         logger.info("Finished processing Phoneme ASR dataset.")
         return
+    elif dataset == "ljspeech":
+        logger.info(
+            f"Loading LJSpeech dataset. Sampling {max_sample_size or 'all'} items."
+        )
+        try:
+            from datasets import load_dataset, Audio
+        except ImportError:
+            logger.error("Please 'pip install datasets' to use LJSpeech.")
+            return
+        lj = load_dataset("lj_speech", split="train")
+
+        counter = 0
+        for item in tqdm(
+            lj,
+            dynamic_ncols=True,
+            desc="Processing LJSpeech",
+        ):
+            audio_data = item["audio"]["array"]
+            identifier = item["audio"].get("path", f"i{counter}")
+            # Resample the audio to 48000Hz if needed
+            original_sr = item["audio"].get("sampling_rate", 22050)
+            if original_sr != sample_rate:
+                audio_data = librosa.resample(
+                    np.array(audio_data, dtype=np.float32),
+                    orig_sr=original_sr,
+                    target_sr=sample_rate,
+                )
+            process_audio_array(
+                audio_in=audio_data.astype(np.float32),  # Ensure correct dtype
+                identifier=identifier,
+                idx=counter,
+                sr=sample_rate,
+                slicer=slicer,
+                filter_coeffs=(b, a),
+                gt_wavs_dir=gt_wavs_dir,
+                wavs16k_dir=wavs16k_dir,
+                per=per,
+                overlap=overlap,
+                max_amp=max_amp,
+                alpha=alpha,
+            )
+            counter += 1
+            if max_sample_size and counter >= max_sample_size:
+                break
 
     audio_exts = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
     if recursive:

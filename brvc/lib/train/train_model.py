@@ -118,7 +118,7 @@ def train_model(
     # log_interval: int = 200,
     pretrain_g: Union[Path, Literal["base", "last"], None] = "base",
     pretrain_d: Union[Path, Literal["base", "last"], None] = "base",
-    opt_state: Optional[Path, Literal["last"]] = None,
+    opt_state: Optional[Path | Literal["last"]] = None,
     # is_half: bool = False,
     accelerator: Accelerator = Accelerator(),
 ):

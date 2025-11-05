@@ -18,7 +18,7 @@ def run_training_cli(
     """
     Run the training process with command-line arguments.
     Args:
-        dataset (str | Path): Path to the dataset or name of the online dataset.
+        dataset (str | Path): Path to the dataset or name of the online dataset (e.g. "ljspeech").
         exp_dir (Optional[Path]): Directory to save experiment outputs.
         save_every (Optional[int]): Save model every N epochs. If None, only save at the end.
         epochs (int): Number of training epochs.
