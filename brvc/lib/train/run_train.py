@@ -101,6 +101,7 @@ def run_training(
         save_every_epoch=save_every_epoch,
         pretrain_d=load_pretrain,
         pretrain_g=load_pretrain,
+        opt_state=None if load_pretrain != "last" else "last",
         accelerator=accelerator,
     )
 

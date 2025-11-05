@@ -34,8 +34,8 @@ def save_checkpoint(
     accelerator: Accelerator,
     net_g: SynthesizerTrnMsNSFsid,
     net_d: MultiPeriodDiscriminatorV2,
-    optim_g: torch.optim.Optimizer,
-    optim_d: torch.optim.Optimizer,
+    optim_g: torch.optim.AdamW,
+    optim_d: torch.optim.AdamW,
     epoch: int,
     global_step: int,
     model_dir: Path,
@@ -49,18 +49,9 @@ def save_checkpoint(
         unwrapped_d: MultiPeriodDiscriminatorV2 = accelerator.unwrap_model(net_d)
 
         # Save model weights as safetensors (only tensors allowed).
-        # Optimizer state and scalar metadata (epoch, global_step) are saved separately
-        # in a .opt.pth file because optimizer state dicts contain Python objects.
-        # g_state: dict[str, torch.Tensor] = unwrapped_g.state_dict()
-        # d_state: dict[str, torch.Tensor] = unwrapped_d.state_dict()
-
-        # # Move tensors to CPU to ensure compatibility
-        # g_state_cpu = {k: v.cpu() for k, v in g_state.items()}
-        # d_state_cpu = {k: v.cpu() for k, v in d_state.items()}
-
-        g_safetensors_path = save_dir / f"G_{global_step}.safetensors"
-        d_safetensors_path = save_dir / f"D_{global_step}.safetensors"
-        optimizers_path = save_dir / f"optimizers_{global_step}.pth"
+        g_safetensors_path = save_dir / f"G_{epoch}.safetensors"
+        d_safetensors_path = save_dir / f"D_{epoch}.safetensors"
+        optimizers_path = save_dir / f"O_{epoch}.pth"
 
         save_model(
             unwrapped_g,
@@ -125,8 +116,9 @@ def train_model(
     betas: tuple = (0.8, 0.99),
     save_every_epoch: Optional[int] = None,
     # log_interval: int = 200,
-    pretrain_g: Union[Path, Literal["base"], Literal["last"], None] = "base",
-    pretrain_d: Union[Path, Literal["base"], Literal["last"], None] = "base",
+    pretrain_g: Union[Path, Literal["base", "last"], None] = "base",
+    pretrain_d: Union[Path, Literal["base", "last"], None] = "base",
+    opt_state: Optional[Path, Literal["last"]] = None,
     # is_half: bool = False,
     accelerator: Accelerator = Accelerator(),
 ):
@@ -155,12 +147,8 @@ def train_model(
 
     train_loader = DataLoader(
         train_dataset,
-        # num_workers=4,
         shuffle=False,
-        # pin_memory=True,
         collate_fn=collate_fn,
-        # persistent_workers=True,
-        # prefetch_factor=8,
     )
 
     # Models
@@ -205,17 +193,7 @@ def train_model(
         eps=eps,
     )
 
-    # Schedulers
-    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=lr_decay)
-    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=lr_decay)
-
-    # Prepare with accelerator
-    net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d = (
-        accelerator.prepare(
-            net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d
-        )
-    )
-
+    # Load pretrained if specified
     if pretrain_g == "last":
         ckpt_g = sorted(exp_dir.glob("G_*.pth"))
         if len(ckpt_g) > 0:
@@ -228,7 +206,12 @@ def train_model(
             pretrain_d = ckpt_d[-1]
         else:
             pretrain_d = None
-
+    if opt_state == "last":
+        ckpt_o = sorted(exp_dir.glob("O_*.pth"))
+        if len(ckpt_o) > 0:
+            opt_state = ckpt_o[-1]
+        else:
+            opt_state = None
     if pretrain_g == "base":
         pretrain_g = Path("assets/pretrained_v2/f0G48k.pth")
         # Check if file exists
@@ -304,6 +287,30 @@ def train_model(
             "No pretrained discriminator specified, training from scratch.",
             main_process_only=True,
         )
+    if opt_state is not None:
+        logger.info(
+            f"Loading optimizer state from {opt_state}", main_process_only=True
+        )
+        # Load optimizer states
+        ckpt = torch.load(opt_state, map_location="cpu")
+        optim_g.load_state_dict(ckpt["optimizer_g"])
+        optim_d.load_state_dict(ckpt["optimizer_d"])
+        logger.info(
+            f"Loaded optimizer states from epoch {ckpt.get('epoch', 'N/A')}, step {ckpt.get('global_step', 'N/A')}",
+            main_process_only=True,
+        )
+    
+    # Schedulers
+    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=lr_decay)
+    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=lr_decay)
+
+    # Prepare with accelerator
+    net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d = (
+        accelerator.prepare(
+            net_g, net_d, optim_g, optim_d, train_loader, scheduler_g, scheduler_d
+        )
+    )
+
     # Training loop
     global_step = 0
     logger.info(f"Starting training for {epochs} epochs")

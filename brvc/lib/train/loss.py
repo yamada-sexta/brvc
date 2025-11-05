@@ -18,7 +18,6 @@ def discriminator_loss(
 
     return loss, r_losses, g_losses
 
-
 def kl_loss(
     z_p: torch.Tensor,
     logs_q: torch.Tensor,
