@@ -205,23 +205,26 @@ def train_model(
 
     # Load pretrained if specified
     if pretrain_g == "last":
-        ckpt_g = sorted(save_dir.glob("G_*.pth"))
-        if len(ckpt_g) > 0:
-            pretrain_g = ckpt_g[-1]
+        if (save_dir / "G_latest.safetensors").exists():
+            pretrain_g = save_dir / "G_latest.safetensors"
         else:
-            pretrain_g = None
+            logger.warning(
+                f"Chosen to load last pretrained generator, but no checkpoint found at {save_dir / 'G_latest.safetensors'}", main_process_only=True
+            )
     if pretrain_d == "last":
-        ckpt_d = sorted(save_dir.glob("D_*.pth"))
-        if len(ckpt_d) > 0:
-            pretrain_d = ckpt_d[-1]
+        if (save_dir / "D_latest.safetensors").exists():
+            pretrain_d = save_dir / "D_latest.safetensors"
         else:
-            pretrain_d = None
+            logger.warning(
+                f"Chosen to load last pretrained discriminator, but no checkpoint found at {save_dir / 'D_latest.safetensors'}", main_process_only=True
+            )
     if opt_state == "last":
-        ckpt_o = sorted(save_dir.glob("O_*.pth"))
-        if len(ckpt_o) > 0:
-            opt_state = ckpt_o[-1]
+        if (save_dir / "O_latest.pth").exists():
+            opt_state = save_dir / "O_latest.pth"
         else:
-            opt_state = None
+            logger.warning(
+                f"Chosen to load last optimizer state, but no checkpoint found at {save_dir / 'O_latest.pth'}", main_process_only=True
+            )
     if pretrain_g == "base":
         pretrain_g = Path("assets/pretrained_v2/f0G48k.pth")
         # Check if file exists
