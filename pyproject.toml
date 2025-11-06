@@ -22,6 +22,7 @@ dependencies = [
     "swift-f0>=0.1.2",
     "safetensors>=0.6.2",
     "numba>=0.62.1",
+    "diffusers>=0.35.2",
 ]
 # [project.scripts]
 # hello = "jurigged"
