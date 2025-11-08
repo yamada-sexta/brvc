@@ -1,17 +1,11 @@
-from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 from numba import njit, prange
-from typing import Any
 
-ArrayF = NDArray[np.float32]
-ArrayI = NDArray[np.int32]
-
-
-@njit(cache=True, fastmath=True)
+@njit(cache=True, fastmath=True, inline="always", nogil=True)
 def maximum_path_each_numba(
-    path: ArrayI,
-    value: ArrayF,
+    path: NDArray[np.int32],
+    value: NDArray[np.float32],
     t_x: int,
     t_y: int,
     max_neg_val: float = -1e9,
@@ -43,8 +37,8 @@ def maximum_path_each_numba(
 
 @njit(parallel=True, cache=True, fastmath=True)
 def maximum_path_c(
-    paths: ArrayI,
-    values: ArrayF,
+    paths: NDArray[np.int32],
+    values: NDArray[np.float32],
     t_xs: NDArray[np.int32],
     t_ys: NDArray[np.int32],
     max_neg_val: float = -1e9,
