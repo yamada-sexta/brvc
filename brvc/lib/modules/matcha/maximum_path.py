@@ -2,7 +2,8 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import njit, prange
 
-@njit(cache=True, fastmath=True, inline="always", nogil=True)
+
+@njit(cache=True, fastmath=True, inline="always", nogil=True, boundscheck=False)
 def maximum_path_each_numba(
     path: NDArray[np.int32],
     value: NDArray[np.float32],
@@ -35,7 +36,7 @@ def maximum_path_each_numba(
             index -= 1
 
 
-@njit(parallel=True, cache=True, fastmath=True)
+@njit(parallel=True, cache=True, fastmath=True, nogil=True, boundscheck=False)
 def maximum_path_c(
     paths: NDArray[np.int32],
     values: NDArray[np.float32],
