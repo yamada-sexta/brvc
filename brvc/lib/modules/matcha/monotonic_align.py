@@ -47,18 +47,18 @@ def test(batch_size: int = 32, t_x: int = 64, t_y: int = 80) -> None:
     elapsed = time.perf_counter() - start
 
     # Basic correctness checks
-    assert path.shape == value.shape, "❌ Output shape mismatch"
-    assert torch.all((path == 0) | (path == 1)), "❌ Path tensor is not binary"
+    assert path.shape == value.shape, "[Error] Output shape mismatch"
+    assert torch.all((path == 0) | (path == 1)), "[Error] Path tensor is not binary"
 
     # Sanity check: each batch should have at least one '1' value
     non_empty = (path.sum(dim=(1, 2)) > 0).all().item()
-    assert non_empty, "❌ Empty path detected"
+    assert non_empty, "[Error] Empty path detected"
 
-    print(f"✅ Shape check: {tuple(path.shape)}")
-    print(f"✅ Binary check: PASS")
-    print(f"✅ Non-empty paths: PASS")
-    print(f"⚡ Runtime: {elapsed * 1000:.2f} ms for batch={batch_size}")
-    print(f"🚀 Speed per item: {elapsed / batch_size * 1000:.2f} ms/item")
+    print(f"[Info] Shape check: {tuple(path.shape)}")
+    print(f"[Info] Binary check: PASS")
+    print(f"[Info] Non-empty paths: PASS")
+    print(f"[Info] Runtime: {elapsed * 1000:.2f} ms for batch={batch_size}")
+    print(f"[Info] Speed per item: {elapsed / batch_size * 1000:.2f} ms/item")
 
 if __name__ == "__main__":
     test()
