@@ -15,7 +15,7 @@ def sequence_mask(
     return x.unsqueeze(0) < length.unsqueeze(1)
 
 
-def fix_len_compatibility(length: int, num_downsamplings_in_unet: int = 2) -> int:
+def fix_len_compatibility(length: torch.Tensor, num_downsamplings_in_unet: int = 2) -> torch.Tensor:
     factor = torch.scalar_tensor(2).pow(num_downsamplings_in_unet)
     length = (length / factor).ceil() * factor
     if not torch.onnx.is_in_onnx_export():

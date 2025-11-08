@@ -1,17 +1,25 @@
 import datetime as dt
 import math
 import random
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union, TypedDict
 
 import torch
 import logging
 
 from lib.modules.matcha.flow_matching import CFM
+from lib.modules.matcha.model import denormalize, fix_len_compatibility, generate_path, sequence_mask
 from lib.modules.text_encoder import TextEncoder
 
 # log = utils.get_pylogger(__name__)
 logger = logging.getLogger(__name__)
 
+class SynthesisResults(TypedDict):
+    encoder_outputs: torch.Tensor
+    decoder_outputs: torch.Tensor
+    attn: torch.Tensor
+    mel: torch.Tensor
+    mel_lengths: torch.Tensor
+    rtf: float
 
 class MatchaTTS():  # 🍵
     def __init__(
@@ -66,7 +74,7 @@ class MatchaTTS():  # 🍵
         self.update_data_statistics(data_statistics)
 
     @torch.inference_mode()
-    def synthesise(
+    def synthesis(
         self,
         x: torch.Tensor,
         x_lengths: torch.Tensor,
@@ -74,7 +82,7 @@ class MatchaTTS():  # 🍵
         temperature: float = 1.0,
         spks: Optional[torch.Tensor] = None,
         length_scale: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> SynthesisResults:
         """
         Generates mel-spectrogram from text. Returns:
             1. encoder outputs
