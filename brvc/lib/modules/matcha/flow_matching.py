@@ -1,20 +1,25 @@
 from abc import ABC
-from typing import Optional
-
+from typing import Optional, TypedDict
 import torch
 import torch.nn.functional as F
+import logging
+# from matcha.models.components.decoder import Decoder
+# from matcha.utils.pylogger import get_pylogger
 
-from matcha.models.components.decoder import Decoder
-from matcha.utils.pylogger import get_pylogger
+# log = get_pylogger(__name__)
 
-log = get_pylogger(__name__)
+log = logging.getLogger(__name__)
+
+class CFMParameters(TypedDict):
+    solver: str
+    sigma_min: Optional[float]
 
 
 class BASECFM(torch.nn.Module, ABC):
     def __init__(
         self,
         n_feats: int,
-        cfm_params: dict,
+        cfm_params: CFMParameters,
         n_spks: int = 1,
         spk_emb_dim: int = 128,
     ):
@@ -23,11 +28,8 @@ class BASECFM(torch.nn.Module, ABC):
         self.n_spks = n_spks
         self.spk_emb_dim = spk_emb_dim
         self.solver = cfm_params.solver
-        if hasattr(cfm_params, "sigma_min"):
-            self.sigma_min = cfm_params.sigma_min
-        else:
-            self.sigma_min = 1e-4
-
+        self.sigma_min = cfm_params.sigma_min if cfm_params.sigma_min else 1e-4
+        
         self.estimator = None
 
     @torch.inference_mode()
@@ -144,12 +146,14 @@ class BASECFM(torch.nn.Module, ABC):
         return loss, y
 
 
+
+
 class CFM(BASECFM):
     def __init__(
         self,
         in_channels: int,
         out_channel: int,
-        cfm_params: dict,
+        cfm_params: CFMParameters,
         decoder_params: dict,
         n_spks: int = 1,
         spk_emb_dim: int = 64,

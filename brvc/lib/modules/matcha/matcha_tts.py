@@ -1,17 +1,27 @@
 import datetime as dt
 import math
 import random
-from typing import Any, Dict, Optional, Tuple, Union, TypedDict
+from typing import Any, Dict, Optional, Tuple, Union, TypedDict, TYPE_CHECKING
 
 import torch
 import logging
-
+from torch import nn
+from lib.modules.matcha import monotonic_align
 from lib.modules.matcha.flow_matching import CFM
-from lib.modules.matcha.model import denormalize, fix_len_compatibility, generate_path, sequence_mask
+
+if TYPE_CHECKING:
+    from lib.modules.matcha.flow_matching import CFMParameters
+from lib.modules.matcha.model import (
+    denormalize,
+    duration_loss,
+    fix_len_compatibility,
+    generate_path,
+    sequence_mask,
+)
 from lib.modules.text_encoder import TextEncoder
 
-# log = utils.get_pylogger(__name__)
 logger = logging.getLogger(__name__)
+
 
 class SynthesisResults(TypedDict):
     encoder_outputs: torch.Tensor
@@ -21,7 +31,8 @@ class SynthesisResults(TypedDict):
     mel_lengths: torch.Tensor
     rtf: float
 
-class MatchaTTS():  # 🍵
+
+class MatchaTTS(nn.Module):  # 🍵
     def __init__(
         self,
         n_vocab: int,
@@ -30,7 +41,7 @@ class MatchaTTS():  # 🍵
         n_feats: int,
         encoder: Any,
         decoder: Any,
-        cfm: Any,
+        cfm: "CFMParameters",
         data_statistics: Any,
         out_size: int,
         optimizer: Optional[Any] = None,
