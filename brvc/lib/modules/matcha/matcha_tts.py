@@ -31,15 +31,32 @@ class SynthesisResults(TypedDict):
     mel_lengths: torch.Tensor
     rtf: float
 
+class EncoderParameters(TypedDict):
+    n_feats: int
+    hidden_channels: int
+    filter_channels: int
+    n_heads: int
+    n_layers: int
+    kernel_size: int
+    p_dropout: float
 
-class MatchaTTS(nn.Module):  # 🍵
+EncoderArgs = TypedDict(
+    "EncoderArgs",
+    {
+        "encoder_type": str,
+        "encoder_params": EncoderParameters,
+        "duration_predictor_params": Dict[str, Any],
+    },
+)
+
+class MatchaTTS(nn.Module):
     def __init__(
         self,
         n_vocab: int,
         n_spks: int,
         spk_emb_dim: int,
         n_feats: int,
-        encoder: Any,
+        encoder: "EncoderArgs",
         decoder: Any,
         cfm: "CFMParameters",
         data_statistics: Any,
