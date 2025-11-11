@@ -1,12 +1,9 @@
+from sympy.printing.pytorch import torch
 from abc import ABC
 from typing import Optional, TypedDict
 import torch
 import torch.nn.functional as F
 import logging
-# from matcha.models.components.decoder import Decoder
-# from matcha.utils.pylogger import get_pylogger
-
-# log = get_pylogger(__name__)
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +26,7 @@ class BASECFM(torch.nn.Module, ABC):
         self.spk_emb_dim = spk_emb_dim
         self.solver = cfm_params.solver
         self.sigma_min = cfm_params.sigma_min if cfm_params.sigma_min else 1e-4
-        
+
         self.estimator = None
 
     @torch.inference_mode()
@@ -73,7 +70,7 @@ class BASECFM(torch.nn.Module, ABC):
         mask: torch.Tensor,
         spks: Optional[torch.Tensor],
         cond: Optional[torch.Tensor],
-    ):
+    ) -> torch.Tensor:
         """
         Fixed euler solver for ODEs.
         Args:
@@ -92,7 +89,7 @@ class BASECFM(torch.nn.Module, ABC):
 
         # I am storing this because I can later plot it by putting a debugger here and saving it to a file
         # Or in future might add like a return_all_steps flag
-        sol = []
+        sol: list[torch.Tensor] = []
 
         for step in range(1, len(t_span)):
             dphi_dt = self.estimator(x, mask, mu, t, spks, cond)
@@ -112,7 +109,7 @@ class BASECFM(torch.nn.Module, ABC):
         mu: torch.Tensor,
         spks: Optional[torch.Tensor] = None,
         cond: Optional[torch.Tensor] = None,
-    ):
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Computes diffusion loss
 
         Args:
@@ -145,9 +142,6 @@ class BASECFM(torch.nn.Module, ABC):
         ) / (torch.sum(mask) * u.shape[1])
         return loss, y
 
-
-
-
 class CFM(BASECFM):
     def __init__(
         self,
@@ -157,7 +151,7 @@ class CFM(BASECFM):
         decoder_params: dict,
         n_spks: int = 1,
         spk_emb_dim: int = 64,
-    ):
+    ) -> None:
         super().__init__(
             n_feats=in_channels,
             cfm_params=cfm_params,
