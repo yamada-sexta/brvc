@@ -23,6 +23,13 @@ dependencies = [
     "safetensors>=0.6.2",
     "numba>=0.62.1",
     "diffusers>=0.35.2",
+    "pyrefly>=0.41.0",
+]
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
 ]
 # [project.scripts]
 # hello = "jurigged"
