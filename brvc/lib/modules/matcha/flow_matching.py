@@ -19,7 +19,7 @@ class BASECFM(torch.nn.Module, ABC):
         cfm_params: CFMParameters,
         n_spks: int = 1,
         spk_emb_dim: int = 128,
-    ):
+    ) -> None:
         super().__init__()
         self.n_feats = n_feats
         self.n_spks = n_spks
@@ -38,7 +38,7 @@ class BASECFM(torch.nn.Module, ABC):
         temperature: float = 1.0,
         spks: Optional[torch.Tensor] = None,
         cond: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         """Forward diffusion
 
         Args:
