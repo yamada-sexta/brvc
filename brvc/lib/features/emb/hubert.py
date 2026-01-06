@@ -2,8 +2,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from accelerate import Accelerator
 import logging
-import os
-import shutil
 from transformers import AutoProcessor, Wav2Vec2FeatureExtractor, HubertModel
 logger = logging.getLogger(__name__)
 def get_hf_hubert_model(
