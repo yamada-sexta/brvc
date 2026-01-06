@@ -24,6 +24,7 @@ dependencies = [
     "numba>=0.62.1",
     "diffusers>=0.35.2",
     "pyrefly>=0.41.0",
+    "python-json-logger>=4.0.0",
 ]
 
 [tool.pyrefly]
