@@ -1,3 +1,4 @@
+from typing import Protocol
 import datetime as dt
 import math
 import random
@@ -19,6 +20,21 @@ from matcha.utils import monotonic_align
 log = utils.get_pylogger(__name__)
 
 
+class TextEncoderParams(Protocol):
+    n_feats: int
+    n_channels: int
+    filter_channels: int
+    n_heads: int
+    n_layers: int
+    kernel_size: int
+    p_dropout: float
+    prenet: bool
+
+class EncoderConfig(Protocol):
+    encoder_type: str
+    encoder_params: TextEncoderParams
+    duration_predictor_params: Any
+    
 
 class MatchaTTS(BaseModule):  # 🍵
     def __init__(
@@ -27,7 +43,7 @@ class MatchaTTS(BaseModule):  # 🍵
         n_spks: int,
         spk_emb_dim: int,
         n_feats: int,
-        encoder_conf: Any,
+        encoder_conf: EncoderConfig,
         decoder: Any,
         cfm: Any,
         data_statistics: Any,
@@ -53,9 +69,9 @@ class MatchaTTS(BaseModule):  # 🍵
             self.spk_emb = torch.nn.Embedding(n_spks, spk_emb_dim)
 
         self.encoder = TextEncoder(
-            encoder.encoder_type,
-            encoder.encoder_params,
-            encoder.duration_predictor_params,
+            encoder_conf.encoder_type,
+            encoder_conf.encoder_params,
+            encoder_conf.duration_predictor_params,
             n_vocab,
             n_spks,
             spk_emb_dim,
